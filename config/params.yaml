@@ -1,0 +1,16 @@
+rigelslam_rot:
+  detector_config_path: /home/zzy/RigelSLAM_Rot/src/config/LoopConfig.yaml
+  saveDirectory: /home/zg/catkin_ws/tmp/
+  saveRawPath: /home/zg/catkin_ws/renderbag/2024-11-18-16-46-49.raw
+  equipmentParamsFile: /home/zzy/RigelSLAM_Rot/src/config/equipment_param.txt
+  isPlayBackTask: false
+  playBackFileName: /home/zg/catkin_ws/originbag/2024-11-18-16-46-49.bin
+  isContinueTask: false
+  scanSceneName: Indoor
+  isOutputIMU: true
+  isOutputFeature: false
+  minRange: 1
+  maxRange: 80
+  scanLines: 16
+  historyKeyframeSearchRadius: 10
+  loopClosureEnableFlag: true
