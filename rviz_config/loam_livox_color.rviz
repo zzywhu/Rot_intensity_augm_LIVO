@@ -117,6 +117,12 @@ Visualization Manager:
           Value: true
       Enabled: true
       Name: mapping
+    - Class: rviz/Image
+      Enabled: true
+      Name: Intensity Image
+      Topic: /rigelslam_rot/intensity_img
+      Queue Size: 10
+      Transport Hint: raw
     - Class: rviz/Group
       Displays:
         - Angle Tolerance: 0.009999999776482582

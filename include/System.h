@@ -22,6 +22,7 @@
 #include <math.h>
 #include <mutex>
 #include <omp.h>
+#include <boost/circular_buffer.hpp>
 
 #include <thread>
 
@@ -303,6 +304,7 @@ public:
                _isFirstFrame(true),
                _timeLastScan(0),
                _dt(0.0),
+               _mapCloudQueue(80),
                _loopCloser(nullptr),
                _isLoopCorrected(false),
                _isFirstLidarFrame(true),
@@ -425,6 +427,8 @@ public:
 
     void transCloud(const PointCloudXYZI::Ptr &cloudIn, PointCloudXYZI::Ptr &cloudOut,
                     const Eigen::Matrix3d &Rol, const Eigen::Vector3d &tol);
+    void transCloud2(const PointCloudXYZI::Ptr &cloudIn, pcl::PointCloud<pcl::PointXYZI>::Ptr &cloudOut,
+        const Eigen::Matrix3d &Rol, const Eigen::Vector3d &tol);                
 
     void transCloudInMotorAxis(const PointCloudXYZI::Ptr &cloudIn, PointCloudXYZI::Ptr &cloudOut,
                                const double &angle, const Eigen::Matrix3d &Rol, const Eigen::Vector3d &tol);
@@ -590,7 +594,8 @@ public:
     PointCloudXYZI::Ptr                                                                    _localCloudPtr;
     PointCloudXYZI::Ptr                                                                    _localSurfCloudPtr;
     PointCloudXYZI::Ptr                                                                    _localCornerCloudPtr;
-
+    boost::circular_buffer<PointCloudXYZI::Ptr>                                            _mapCloudQueue;
+    cv::Mat                                                                                _intensityImg;
     PointCloudXYZI::Ptr                                                                    _localCloudDownPtr;
     PointCloudXYZI::Ptr                                                                    _localSurfCloudDownPtr;
     PointCloudXYZI::Ptr                                                                    _localCornerCloudDownPtr;

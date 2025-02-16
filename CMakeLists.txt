@@ -198,7 +198,8 @@ macro(source_group_by_dir source_files)
         endforeach(sgbd_file)
     endif(MSVC)
 endmacro(source_group_by_dir)
-
+set(cv_bridge_DIR "/opt/ros/melodic/share/cv_bridge/cmake")
+find_package(cv_bridge REQUIRED)
 find_package(PythonLibs REQUIRED)
 # find_path(MATPLOTLIB_CPP_INCLUDE_DIRS "matplotlibcpp.h")
 find_package(PCL 1.7 REQUIRED)
@@ -206,9 +207,12 @@ find_package(Ceres REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(GTSAM REQUIRED QUIET)
+find_package(sensor_msgs REQUIRED QUIET)
+find_package(image_transport REQUIRED)
+message(111: ${cv_bridge_DIR})
 #set(CMAKE_PREFIX_PATH "/home/zg/depends/opencv-4.5.5/install")
 find_package(OpenCV REQUIRED QUIET)
-#message(opencv: ${OpenCV_INCLUDE_DIRS})
+
 
 add_subdirectory(3rdParty/HesaiLidar_General_SDK)
 
@@ -241,6 +245,7 @@ include_directories(
         ${PYTHON_INCLUDE_DIRS}
         ${YAML_CPP_INCLUDE_DIR}
         ${OpenCV_INCLUDE_DIRS}
+        ${cv_bridge_INCLUDE_DIRS}
         3rdParty/HesaiLidar_General_SDK/include
         include
 )
@@ -305,7 +310,7 @@ file(GLOB_RECURSE LoopCloser_SRC "src/LoopCloser/*.cpp")
 add_library(LoopCloser SHARED ${LoopCloser_SRC})
 target_link_libraries(LoopCloser Misc Mapper Registrator Feature Optimizer DataIO ${PCL_LIBRARIES} ${PTHREADS_LIBRARY} ${CERES_LIBRARIES} gtsam)
 target_compile_definitions(LoopCloser PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
-
+SET(cv_bridge_LIBRARIES "/opt/ros/melodic/lib/libcv_bridge.so")
 #file(GLOB_RECURSE SlamSys_SRC "src/System.cpp")
 if(MSVC)
     file(GLOB_RECURSE CORE_HDR "include/*.hpp" "include/*.h")
@@ -321,7 +326,9 @@ if(MSVC)
             "src/Registrator/RegistrationLoam.cpp"
             ${Misc_SRC}
             ${LoopCloser_SRC}
-            ${CORE_HDR})
+            ${CORE_HDR}
+            ${cv_bridge_LIBRARIES})
+            
 else()
     add_library(SlamCore
             SHARED
@@ -332,7 +339,7 @@ else()
 endif()
 
 target_link_libraries(SlamCore SensorProcess DataIO Feature Initializer LoopCloser Mapper Matcher Misc Optimizer Registrator Viewer 
-${PCL_LIBRARIES} ${PCAP_LIBRARIES} ${PTHREADS_LIBRARY} ${CERES_LIBRARIES} ${GTSAM_LIBRARIES} ${YAML_CPP_LIBRARIES} PandarGeneralSDK)
+${PCL_LIBRARIES} ${PCAP_LIBRARIES} ${PTHREADS_LIBRARY} ${CERES_LIBRARIES} ${GTSAM_LIBRARIES} ${YAML_CPP_LIBRARIES} ${OpenCV_LIBRARIES}  ${cv_bridge_LIBRARIES} PandarGeneralSDK)
 
 target_compile_definitions(SlamCore PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
 
@@ -368,7 +375,7 @@ if(UNIX)
 #target_link_libraries(ZGSlamTest SlamCore ${PTHREADS_LIBRARY} ${catkin_LIBRARIES})
 
 add_executable(ZGSlamRosTest Examples/ZGSlamRosTest.cpp)
-target_link_libraries(ZGSlamRosTest SlamCore Misc ${PTHREADS_LIBRARY} ${catkin_LIBRARIES})
+target_link_libraries(ZGSlamRosTest SlamCore Misc ${PTHREADS_LIBRARY} ${catkin_LIBRARIES} ${cv_bridge_LIBRARIES} cv_bridge)
 
 #add_executable(RosSlamTest Examples/RosSlamTest.cpp)
 #target_link_libraries(RosSlamTest SlamCore ${PTHREADS_LIBRARY} ${catkin_LIBRARIES})

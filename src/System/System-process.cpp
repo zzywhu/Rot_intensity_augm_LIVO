@@ -916,13 +916,15 @@ void System::processCloudIKFoM()
     _Rwl=_stateIkfom.rot.matrix()*_stateIkfom.offset_R_L_I;
     _twl=_stateIkfom.rot.matrix()*_stateIkfom.offset_T_L_I+_stateIkfom.pos;
     transCloud(_localCloudDownPtr, _globalCloudDownPtr, _Rwl, _twl);
-
-    if(_config._matchMethod==0)//KdTree
-        updateKdTreeMap(_globalCloudDownPtr->points);
+    PointCloudXYZI::Ptr curWorldCloudPtr(new PointCloudXYZI());
+    transCloud(_localCloudDownPtr, curWorldCloudPtr, _Rwl, _twl);
+    _mapCloudQueue.push_back(curWorldCloudPtr);
+    // if(_config._matchMethod==0)//KdTree
+    //     updateKdTreeMap(_globalCloudDownPtr->points);
     if(_config._matchMethod==1)//Voxelmap
     {
-        if(_config._covType==2)
-            _ikdtree.Add_Points(_globalCloudDownPtr->points,true);
+        // if(_config._covType==2)
+        //     _ikdtree.Add_Points(_globalCloudDownPtr->points,true);
         updateVoxelMap();
     }
     //_fTimeOfs<<time4.toc() << " ";
@@ -949,6 +951,7 @@ void System::processCloudIKFoM()
         updateDenseMap(curWorldCloudPtr);
         saveMap();
     }
+    
     //PAUSE;
     //_fTimeOfs<<std::endl;
 }

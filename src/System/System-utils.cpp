@@ -61,7 +61,23 @@ void System::transCloud(const PointCloudXYZI::Ptr &cloudIn, PointCloudXYZI::Ptr 
         cloudOut->points[i].normal_z = pb.normal_z;
     }
 }
+void System::transCloud2(const PointCloudXYZI::Ptr &cloudIn, pcl::PointCloud<pcl::PointXYZI>::Ptr &cloudOut,
+    const Eigen::Matrix3d &Rol, const Eigen::Vector3d &tol)
+{
+const int cloudSize = cloudIn->size();
+cloudOut->resize(cloudSize);
+for (int i = 0; i < cloudSize; i++)
+{
+const auto &pb = cloudIn->points[i];
+V3D pl(pb.x, pb.y, pb.z); // pl
+V3D po(Rol * pl + tol);   // po=(Tol*pl)
 
+cloudOut->points[i].x = po[0];
+cloudOut->points[i].y = po[1];
+cloudOut->points[i].z = po[2];
+cloudOut->points[i].intensity = pb.intensity;
+}
+}
 void System::transCloudInMotorAxis(const PointCloudXYZI::Ptr &cloudIn, PointCloudXYZI::Ptr &cloudOut,
                                    const double &angle, const Eigen::Matrix3d &Rol, const Eigen::Vector3d &tol)
 {

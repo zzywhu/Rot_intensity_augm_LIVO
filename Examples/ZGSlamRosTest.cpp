@@ -19,7 +19,10 @@
 #include <sys/resource.h>
 #include <malloc.h>
 #include <glog/logging.h>
-
+#include <ros/ros.h>
+#include <sensor_msgs/Image.h>
+#include <cv_bridge/cv_bridge.h>
+#include <opencv2/opencv.hpp>
 #include "System.h"
 #include "ReadWriter.h"
 #include "RigelSLAMRawIOTools.h"
@@ -72,7 +75,7 @@ bool _exitFlag=false;
 std::string _lidTopic="/ZG/lidar";
 std::string _imuTopic="/ZG/IMU_data";
 std::string _motorTopic="/ZG/Motor";
-
+std::string _imgTopic = "/rigelslam_rot/intensity_img";
 std::string _stopTopic="/ZG/StopSLAMNode";
 std::string _endTopic="/ZG/SLAMNodeStoped";
 std::string _errorTopic="/errorCase";
@@ -158,6 +161,22 @@ void RGBpointBodyLidarToIMU(PointType const * const pi, PointType * const po)
     po->z = p_body_imu(2);
     po->intensity = pi->intensity;
 }
+
+void publishImage(const ros::Publisher &pubImage) 
+{
+    // 创建 Image 消息
+    sensor_msgs::ImagePtr img_msg = cv_bridge::CvImage(std_msgs::Header(), "mono8", _sys->_intensityImg).toImageMsg();
+    
+    // 设置时间戳
+    img_msg->header.stamp = ros::Time().fromSec(_sys->_lidarEndTime);
+    
+    // 设置坐标系 ID
+    img_msg->header.frame_id = "odom";
+
+    // 发布图像
+    pubImage.publish(img_msg);
+}
+
 
 void publishFrameBody(const ros::Publisher & pubLaserCloudBody)
 {
@@ -848,7 +867,7 @@ void imuCallback(const sensor_msgs::Imu::ConstPtr &msgIn)
 //    else
 //        _lastIMUSeqID=msgIn->header.seq;
     SensorMsgs::ImuData::Ptr msg(new SensorMsgs::ImuData);
-    msg->angular_velocity=Eigen::Vector3d(msg In->angular_velocity.x,
+    msg->angular_velocity=Eigen::Vector3d(msgIn->angular_velocity.x,
                                           msgIn->angular_velocity.y,
                                           msgIn->angular_velocity.z);
     msg->linear_acceleration =Eigen::Vector3d(msgIn->linear_acceleration.x,
@@ -1166,7 +1185,7 @@ void setParams()
     _sys->_config._isMotorInitialized = true;
     _sys->_config._isImuInitialized = true;
     _sys->_config._nSkipFrames = 20;
-    _sys->_config._enableGravityAlign = true;
+    _sys->_config._enableGravityAlign = false;
 
     _sys->_config._minFramePoint = 1000;
     _sys->_config._isFeatExtractEn = false;
@@ -1409,6 +1428,92 @@ void createWorkspace()
     mkdir(_workspace.c_str(), 0777);
 }
 
+
+
+cv::Mat projectToXZ(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud) {
+    const int IMG_HEIGHT = 512;  // 俯仰角分辨率（Z 方向）
+    const int IMG_WIDTH = 1024;  // 水平角度分辨率（X 方向）
+
+    cv::Mat intensityImage = cv::Mat::zeros(IMG_HEIGHT, IMG_WIDTH, CV_32F);
+
+    for (const auto& p : cloud->points) {
+        float r = std::sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
+        
+        // 计算角度
+        float theta = std::atan2(-p.x, p.y);  // 前方（-x）方向的角度
+        float phi = std::asin(p.z / r);       // 俯仰角（z 方向）
+
+        // 归一化到图像尺寸
+        int u = static_cast<int>((theta + M_PI) / (2 * M_PI) * IMG_WIDTH);  // 归一化到 [0, IMG_WIDTH]
+        int v = static_cast<int>((-phi + M_PI / 2) / M_PI * IMG_HEIGHT);     // 归一化到 [0, IMG_HEIGHT]
+
+        if (u >= 0 && u < IMG_WIDTH && v >= 0 && v < IMG_HEIGHT) {
+            intensityImage.at<float>(v, u) = p.intensity;
+        }
+    }
+
+    // 归一化到 [0, 255]
+    double minVal, maxVal;
+    cv::minMaxLoc(intensityImage, &minVal, &maxVal);
+    intensityImage.convertTo(intensityImage, CV_8U, 255.0 / (maxVal - minVal), -minVal * 255.0 / (maxVal - minVal));
+
+    // 直方图均衡化
+    cv::equalizeHist(intensityImage, intensityImage);
+
+    // 可选：伽马校正增强对比度
+    cv::Mat gammaImage;
+    intensityImage.convertTo(gammaImage, CV_32F, 1.0 / 255.0);
+    pow(gammaImage, 0.5, gammaImage);  // γ = 0.5
+    gammaImage.convertTo(intensityImage, CV_8U, 255);
+
+    return intensityImage;
+}
+
+
+void imagecreatortest()
+{
+    //_sys->_dispMutex.lock();
+    //clock_t start=clock();
+    //std::cout<<_sys->_mapCloudQueue.size()<<std::endl;
+    for(int i=0;i<_sys->_mapCloudQueue.size();i++)
+    {
+        *_sys->_denseCloudMap+=*_sys->_mapCloudQueue[i];
+    }
+    
+    //clock_t end = clock();
+    //double elapsed1 = double(end - start) / CLOCKS_PER_SEC * 1000;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr intensityMap(new pcl::PointCloud<pcl::PointXYZI>); 
+    _sys->transCloud2(_sys->_denseCloudMap, intensityMap,_sys->_stateIkfom.rot.matrix().inverse(),-_sys->_stateIkfom.rot.matrix().inverse()*_sys->_stateIkfom.pos);
+    //_intensityMap=filterPointCloudInSphere(_intensityMaptemp, 20);
+    // if(_sys->_frameId==100)
+    // {
+    //     pcl::io::savePCDFileASCII("/home/zzy/SLAM/my_slam_work/src/Rot_intensity_augm_LIVO/image/pointcloud.pcd", *intensityMap);
+    // }
+    //start=clock(); 
+    // const int cloudSize = _sys->_denseCloudMap->size();
+    // std::vector<Eigen::Vector4d> points(cloudSize);
+    // std::vector<double> intensities(cloudSize);
+    // Eigen::Matrix3d Rol = _sys->_stateIkfom.rot.matrix().inverse();
+    // Eigen::Vector3d tol = -Rol * _sys->_stateIkfom.pos;
+    // //#pragma omp parallel for num_threads(MP_PROC_NUM)
+    // for (int i = 0; i < cloudSize; i++)
+    // {
+    //     auto &pb = _sys->_denseCloudMap->points[i];
+    //     V3D pl(pb.x, pb.y, pb.z); // pl
+    //     V3D po(Rol * pl + tol);   // po=(Tol*pl)
+    //     points[i] <<po[0],po[1],po[2],pb.intensity;
+    //     intensities[i] = pb.intensity;
+    // }
+    // vlcal::PreprocessMap  preprocess_map;
+    // preprocess_map.load_lidar_points(points,intensities,0.002,1.0,_sys->_intensityImg,_sys->_intensityIndics);
+    //std::cout<<intensityMap->size()<<std::endl;
+    _sys->_intensityImg=projectToXZ(intensityMap);
+    //cv::imwrite("/home/zzy/SLAM/my_slam_work/src/Rot_intensity_augm_LIVO/image/image.png",_sys->_intensityImg);
+    _sys->_denseCloudMap->clear();
+    // _sys->_dispMutex.unlock();
+    //std::cerr << "1 " << std::endl;
+    //return;
+}
 int main(int argc, char **argv)
 {
     google::InitGoogleLogging("XXX");
@@ -1447,7 +1552,7 @@ int main(int argc, char **argv)
     ros::Subscriber subCapControlMarker = _nh.subscribe<std_msgs::Int32>(_ctrlMarkerGetTopic, 5,
                                                                          &captureControlMarkerHandler,
                                                                          nullptr, ros::TransportHints().tcpNoDelay());
-
+    ros::Publisher pubImg = _nh.advertise<sensor_msgs::Image>(_imgTopic, 1);
     ros::Publisher pubMap = _nh.advertise<sensor_msgs::PointCloud2>(_mapTopic, 1);
     ros::Publisher pubPath = _nh.advertise<nav_msgs::Path>(_pathTopic, 1);
     ros::Publisher pubOdomAftMapped = _nh.advertise<nav_msgs::Odometry> (_odomTopic, 10);
@@ -1596,6 +1701,8 @@ int main(int argc, char **argv)
                 _sys->mapping();
 
             //for display
+            imagecreatortest();
+            publishImage(pubImg);
             publishPath(pubPath);
             publishOdometry(pubOdomAftMapped);
             publishFrameBody(pubLaserCloudFullBody);
@@ -1608,8 +1715,8 @@ int main(int argc, char **argv)
                 malloc_trim(0);
             _memUsage=availableMemOri-getAvailableMemory();
             _meanFrameTime += (frameTime.toc() - _meanFrameTime) / 100;
-            //printf("Frame procecssed time %f ms\n", _meanFrameTime);
-            //printf("Memory usage %lf Gb\n", std::max(0., _memUsage));
+            printf("Frame procecssed time %f ms\n", _meanFrameTime);
+            printf("Memory usage %lf Gb\n", std::max(0., _memUsage));
 #if OUTPUT_LOG
             fStatOfs<<std::fixed<<std::setprecision(8)<<_meanFrameTime<<","<<_memUsage<<std::endl;
 #endif
