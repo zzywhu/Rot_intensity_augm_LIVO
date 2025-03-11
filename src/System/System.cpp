@@ -282,7 +282,8 @@ void System::motorMotionCompensationZG()
             //std::cout<<"lid:"<<it_pcl->curvature / double(1000) <<"->"<<curAngle<<std::endl;
             Eigen::Matrix3d R;
             Eigen::Vector3d t;
-            _cloudAxisTransfer->CalculatePose(rad2deg(curAngle), R, t);
+            //_cloudAxisTransfer->CalculatePose(rad2deg(curAngle), R, t);
+            _cloudAxisTransfer->getLid2IMUTrans(curAngle, R, t);
             Eigen::Vector3d pOri(it_pcl->x, it_pcl->y, it_pcl->z);
             Eigen::Vector3d pTrans = R * pOri + t;
             it_pcl->x = pTrans(0);
@@ -539,8 +540,8 @@ void System::initVoxelMap()
 {
     _Rwl = _stateIkfom.rot * _stateIkfom.offset_R_L_I;                     // Rwl=Rwi*Ril
     _twl = _stateIkfom.rot * _stateIkfom.offset_T_L_I.matrix() + _stateIkfom.pos; // twl=Twi*til
-    PointCloudXYZI::Ptr globalSurfCloudPtr(new PointCloudXYZI());
-    transCloud(_localSurfCloudPtr, globalSurfCloudPtr, _Rwl, _twl);
+    //PointCloudXYZI::Ptr globalSurfCloudPtr(new PointCloudXYZI());
+    //transCloud(_localSurfCloudPtr, globalSurfCloudPtr, _Rwl, _twl);
 
     _curSurfPvList.clear();
     for (size_t i = 0; i < _localSurfCloudPtr->size(); i++)
@@ -945,17 +946,17 @@ void System::updateLoopStatus(state_ikfom& state)
         _Rwl = state.rot * state.offset_R_L_I;  // Rwl=Rwi*Ril
         _twl = state.rot.matrix() * state.offset_T_L_I + state.pos;
 
-        {//Append current frame corrected into frontend map
-            transCloud(_localCloudDownPtr, _globalCloudDownPtr, _Rwl, _twl);
-            if(_config._matchMethod==0)//KdTree
-                updateKdTreeMap(_globalCloudDownPtr->points);
-            if(_config._matchMethod==1)//Voxelmap
-            {
-                if(_config._covType==2)
-                    _ikdtree.Add_Points(_globalCloudDownPtr->points,true);
-                updateVoxelMap();
-            }
-        }
+        // {//Append current frame corrected into frontend map
+        //     transCloud(_localCloudDownPtr, _globalCloudDownPtr, _Rwl, _twl);
+        //     if(_config._matchMethod==0)//KdTree
+        //         updateKdTreeMap(_globalCloudDownPtr->points);
+        //     if(_config._matchMethod==1)//Voxelmap
+        //     {
+        //         if(_config._covType==2)
+        //             _ikdtree.Add_Points(_globalCloudDownPtr->points,true);
+        //         updateVoxelMap();
+        //     }
+        // }
         updateViewer(true);// update viewer
         //_loopCloser->getGlobalCloudDown()->clear();
        // PAUSE;
@@ -1773,7 +1774,7 @@ bool System::initSystem()
     {
         _loopCloser = new LoopCloser;
         if(_loopCloser->config()._detectLoopMethod==1)
-            _loopCloser->mutableConfig()._isNeedGravAligned=true;
+            _loopCloser->mutableConfig()._isNeedGravAligned=false;
         else
             _loopCloser->mutableConfig()._isNeedGravAligned=false;
 

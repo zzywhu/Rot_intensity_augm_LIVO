@@ -71,6 +71,19 @@ public:
     }
 };
 
+typedef struct Voxel
+{
+    float size;
+    Eigen::Vector3d voxel_origin;
+    Eigen::Vector3d voxel_color;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud;
+    Voxel(float _size) : size(_size)
+    {
+        voxel_origin << 0, 0, 0;
+        cloud = pcl::PointCloud<pcl::PointXYZI>::Ptr(new pcl::PointCloud<pcl::PointXYZI>);
+    };
+} Voxel;
+
 struct M_POINT
 {
     float xyz[3];

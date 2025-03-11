@@ -100,6 +100,29 @@ public:
         return true;
     }
 
+    bool readZGExtrinsic(const std::string &paramPath)
+    {
+        FILE *fp = fopen(paramPath.c_str(), "r+");
+        if (!fp)
+        {
+            printf("Failed opening param file: %s\n", paramPath.c_str());
+            return false;
+        }
+        fscanf(fp, "%d %lf %lf %lf %lf %lf",
+               &_deviceType, &_angleLid2IMU, &_dzLid2MotAxis,
+               &_dxLid2IMU, &_dyLid2IMU, &_dzLid2IMU);
+
+        _angleLid2IMU = deg2rad(_angleLid2IMU);
+        _dzOffset = abs(_dzLid2MotAxis * cos(_angleLid2IMU));
+        _dxOffset = abs(_dzLid2MotAxis * sin(_angleLid2IMU));
+
+        _fixPart = Translation3d(-_dxLid2IMU + _dxOffset, -_dyLid2IMU, -_dzLid2IMU - _dzOffset) *
+                   AngleAxisd(-M_PI / 2, Vector3d::UnitZ()) *
+                   AngleAxisd(-_angleLid2IMU, Vector3d::UnitX());
+
+        fclose(fp);
+        return true;
+    }
 
     //Read error curve parameters
     bool ReadRPYXYZErrorParams(const char* path)
@@ -186,7 +209,15 @@ public:
         R = errorR * R;
     }
 
-
+    void getLid2IMUTrans(const double &motorAngle, Eigen::Matrix3d &Ril, Eigen::Vector3d &til)
+    {
+        Eigen::Affine3d Til = _fixPart *
+            
+            Eigen::AngleAxisd(-motorAngle, Vector3d::UnitY()) *
+            Eigen::Translation3d(0, 0, -_dzLid2MotAxis);
+        Ril = Til.linear();
+        til = Til.translation();
+    }
 private:
     //Rodri's rotation formula
     Eigen::Vector3d RodriguesRotation(double angle, Eigen::Vector3d rotation_vec, Eigen::Vector3d &vec)
@@ -225,7 +256,15 @@ private:
     Eigen::Vector3d m_imu_X;
     Eigen::Vector3d m_imu_Y;
     Eigen::Vector3d m_imu_Z;
-
+    double _dzLid2MotAxis;
+    double _angleLid2IMU;
+    double _dxLid2IMU;
+    double _dyLid2IMU;
+    double _dzLid2IMU;
+    double _dzOffset;
+    double _dxOffset;
+    int _deviceType;
+    Eigen::Affine3d _fixPart;
     bool m_is_use_rpyxyz_error_param;  //Whether to use error parameters
     vector<Eigen::VectorXd> m_rpyxyz_error_params;  //error parameters
 };
@@ -506,7 +545,7 @@ private:
 
     Eigen::Matrix3d R_;
     Eigen::Vector3d T_;
-
+   
     vector<Eigen::Quaterniond> qs_;
 
     bool m_is_use_rpyxyz_error_param;  //Whether to use error parameters

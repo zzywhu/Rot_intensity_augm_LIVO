@@ -256,6 +256,8 @@ void System::correctLoop()
         }
 
         updateLoopStatus(_stateIkfom);
+        PointCloudXYZI::Ptr pgoCloudPtr(new PointCloudXYZI());
+        PointCloudXYZI::Ptr trajCloud(new PointCloudXYZI());
         if(!_loopCloser->config()._isFramewisePGO)
         {
             if(!_loopCloser->config()._isPgoIncremental)
@@ -264,8 +266,7 @@ void System::correctLoop()
 
                 const Matrix4ds& relPoses=_loopCloser->getRelPoses();
                 CloudBlockPtrs submaps=_loopCloser->getSubMapBlocks();
-//    PointCloudXYZI::Ptr pgoCloudPtr(new PointCloudXYZI());
-//    PointCloudXYZI::Ptr trajCloud(new PointCloudXYZI());
+               
                 for(auto& submap:submaps)
                 {
                     const int& firstIdx=submap->_uniqueId;
@@ -299,20 +300,20 @@ void System::correctLoop()
                             frameBlock->_imuDataList[i]._orientation = imuPose.block<3,3>(0,0);
                             frameBlock->_imuDataList[i]._position = imuPose.block<3,1>(0,3);
                         }
-//            PointCloudXYZI::Ptr frameCloud(new PointCloudXYZI());
-//            pcl::io::loadPCDFile(frameBlock->_pcdFilePath, *frameBlock->_pcRaw);
-//            pcl::transformPointCloud(*frameBlock->_pcRaw, *frameCloud, frameBlock->_poseLo);//pw=Tw1*p1
-//            *pgoCloudPtr+=*frameCloud;
+           PointCloudXYZI::Ptr frameCloud(new PointCloudXYZI());
+           pcl::io::loadPCDFile(frameBlock->_pcdFilePath, *frameBlock->_pcRaw);
+           pcl::transformPointCloud(*frameBlock->_pcRaw, *frameCloud, frameBlock->_poseLo);//pw=Tw1*p1
+           *pgoCloudPtr+=*frameCloud;
 
-//            PointType trajPt;
-//            trajPt.x = frameBlock->_poseLo(0, 3);
-//            trajPt.y = frameBlock->_poseLo(1, 3);
-//            trajPt.z = frameBlock->_poseLo(2, 3);
-//            trajCloud->push_back(trajPt) ;
+           PointType trajPt;
+           trajPt.x = frameBlock->_poseLo(0, 3);
+           trajPt.y = frameBlock->_poseLo(1, 3);
+           trajPt.z = frameBlock->_poseLo(2, 3);
+           trajCloud->push_back(trajPt) ;
                     }
-//        pcl::PCDWriter pcdWriter;
-//        pcdWriter.writeBinary(string(ROOT_DIR) + "PCD/pgoFrameCloud"+std::to_string(submap->_uniqueId)+".pcd", *pgoCloudPtr);
-//        pgoCloudPtr->clear();
+    //    pcl::PCDWriter pcdWriter;
+    //    pcdWriter.writeBinary(string(ROOT_DIR) + "PCD/pgoFrameCloud"+std::to_string(submap->_uniqueId)+".pcd", *pgoCloudPtr);
+    //    pgoCloudPtr->clear();
                 }
 
                 auto curSubmap=_loopCloser->getCurSubmap();
@@ -326,9 +327,9 @@ void System::correctLoop()
             }
         }
 
-        // pcl::PCDWriter pcdWriter;
-        //pcdWriter.writeBinary(string(ROOT_DIR) + "PCD/frameTrajCloud.pcd", *trajCloud);
-        //pcdWriter.writeBinary(string(ROOT_DIR) + "PCD/pgoFrameCloud.pcd", *pgoCloudPtr);
+        pcl::PCDWriter pcdWriter;
+        pcdWriter.writeBinary(string(ROOT_DIR) + "PCD/frameTrajCloud.pcd", *trajCloud);
+        pcdWriter.writeBinary(string(ROOT_DIR) + "PCD/pgoFrameCloud.pcd", *pgoCloudPtr);
         std::cout<<"Loop correct done!"<<std::endl;
     }
 

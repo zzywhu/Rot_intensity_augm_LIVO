@@ -34,7 +34,10 @@
 #include <yaml-cpp/yaml.h>
 //#include "pandarGeneral/pandarGeneral.h"
 //#include "pandarGeneral/point_types.h"
-
+#include <ros/ros.h>
+#include <sensor_msgs/Image.h>
+#include <cv_bridge/cv_bridge.h>
+#include <opencv2/opencv.hpp>
 #include "SensorProcess/IMUProcess.h"
 #include "SensorProcess/IMUPreintegration.h"
 #include "SensorProcess/LidarProcess.h"
@@ -68,6 +71,9 @@
 #include "Feature/FeatureExtractor.h"
 #include "DataIO/ReadWriter.h"
 #include "Viewer/Viewer.h"
+#include "xfeat/XFeat.h"
+#include"ImageProcess/imageprocess.h"
+#include"MLSD/mlsd.h"
 
 #ifdef __SHARED_LIBS__
 #ifdef __DLL_EXPORTS__
@@ -304,7 +310,9 @@ public:
                _isFirstFrame(true),
                _timeLastScan(0),
                _dt(0.0),
-               _mapCloudQueue(80),
+               _mapCloudQueue(200),
+               _XFDetector(4096,0.5,true),
+               _lsd(std::string(ROOT_DIR)+"weights/model_512x512_large.onnx"),
                _loopCloser(nullptr),
                _isLoopCorrected(false),
                _isFirstLidarFrame(true),
@@ -312,6 +320,7 @@ public:
                _globalMapPtr(new pcl::PointCloud<pcl::PointXYZ>),
                _globalCloudXYZPtr(new pcl::PointCloud<pcl::PointXYZ>),
                _localCloudXYZPtr(new pcl::PointCloud<pcl::PointXYZ>),
+               _sparselinecloud(new pcl::PointCloud<pcl::PointXYZI>),
                _Twl(Eigen::Matrix4d::Identity()),
                _rotAlign(Eigen::Matrix3d::Identity()),
                _normvec(new PointCloudXYZI(100000, 1)),
@@ -525,7 +534,25 @@ public:
 
     void processCloudESIKF();
 
+    cv::Mat projectToXZ(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud,bool isinter);
+
+    cv::Mat overlayRedOnGrayscale(const cv::Mat& gray1, const cv::Mat& gray2);
+
+    cv::Mat stackImagesVertical(const cv::Mat& gray1, const cv::Mat& gray2);
+
+    cv::Mat interpolateBlackRegions(const cv::Mat& inputImage);
+
+    void removeLines(cv::Mat& img);
+
+    void filterBrightness(cv::Mat& img);
+
+    
+
+    void imagecreatortest();
+    void imagecreatoropt();
+    void buildsurfmap(pcl::PointCloud<pcl::PointXYZI>::Ptr &densecloud);
     void processCloudIKFoM();
+    
 
     void hShareModelKdTree(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_data);
 
@@ -567,6 +594,13 @@ public:
 
     bool processContinualTask(const std::string& lastTaskPath);
 
+    struct surfmaplist
+    {
+        std::vector<cv::Mat>surfmap;
+
+
+    };
+
 
 public:
     static Config                                                                          _config;
@@ -590,12 +624,13 @@ public:
     int                                                                                    _cloudDownSize;
     int                                                                                    _cloudSurfDownSize;
     int                                                                                    _cloudCornerDownSize;
-
+    M_LSD                                                                                  _lsd;
     PointCloudXYZI::Ptr                                                                    _localCloudPtr;
     PointCloudXYZI::Ptr                                                                    _localSurfCloudPtr;
     PointCloudXYZI::Ptr                                                                    _localCornerCloudPtr;
     boost::circular_buffer<PointCloudXYZI::Ptr>                                            _mapCloudQueue;
     cv::Mat                                                                                _intensityImg;
+    cv::Mat                                                                                _matchImg;
     PointCloudXYZI::Ptr                                                                    _localCloudDownPtr;
     PointCloudXYZI::Ptr                                                                    _localSurfCloudDownPtr;
     PointCloudXYZI::Ptr                                                                    _localCornerCloudDownPtr;
@@ -607,6 +642,8 @@ public:
     PointCloudXYZI::Ptr                                                                    _downCloudMap;
     PointCloudXYZI::Ptr                                                                    _denseCloudMap;
     PointCloudXYZI::Ptr                                                                    _trajCloud;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr                                                   _sparselinecloud;
+    cv::Mat                                                                                _cannyimg;
 
     vector<PointVector>                                                                    _nearestPoints;
     PointVector                                                                            _addedPoints;
@@ -617,7 +654,13 @@ public:
     shared_ptr<LidarProcess>                                                               _lidarProcessor;
     shared_ptr<ImuProcess>                                                                 _imuProcessor;
     shared_ptr<ImuPreintegration>                                                          _imuPreintegration;
-
+    XFeat::XFDetector                                                                      _XFDetector;
+    imgProcesser                                                                           _imgProcesser;
+    cv::Mat                                                                                _mkpts_0;
+    cv::Mat                                                                                _mkpts_1;
+    cv::Mat                                                                                _scanlineIdMap;
+    surfmaplist                                                                            _surfmaplist;
+    std::unordered_map<VOXEL_LOC, Voxel*>                                                  _sparsevoxelmap;
     // raster angle
     double                                                                                 _curMotorAngle;
     double                                                                                 _initMotorAngle;
@@ -638,6 +681,8 @@ public:
     // Lidar pose
     Eigen::Matrix3d                                                                        _Rwl;
     Eigen::Vector3d                                                                        _twl;
+    Eigen::Matrix3d                                                                        _Rwlprop;
+    Eigen::Vector3d                                                                        _twlprop;
     Eigen::Matrix4d                                                                        _prevTwl;
 
     std::vector<Eigen::Matrix4d>                                                           _relToList;
@@ -690,6 +735,8 @@ public:
     //PandarGeneral *                                                                        _pandarReader;
 
     MatchedInfoList                                                                        _matchInfos;
+
+
 
     queue<PointCloudXYZI::Ptr>                                                             _localCloudQueue;
     queue<PointCloudXYZI::Ptr>                                                             _localCloudDownQueue;
@@ -758,6 +805,8 @@ public:
     std::vector<PointWithCov>                                                              _curSurfPvList;
     std::vector<PointWithCov>                                                              _curCornerPvList;
     std::vector<BoxPointType>                                                              _boxToDel;
+    std::vector<std::vector<int>>                                                          _linelist;
+    std::vector<Matchlinelist>                                                             _matchlinelist;
 
     LoopCloser*                                                                            _loopCloser;
     bool                                                                                   _isLoopCorrected;

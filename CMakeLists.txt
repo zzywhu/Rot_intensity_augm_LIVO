@@ -112,7 +112,7 @@ option(BA_ENABLE "Enable mapping with bundle adjustment" OFF)
 option(TEASER_ON "Enable teaser registration" OFF)
 option(CERES_ON "Enable ceres optimization" ON)
 option(G2O_ON "Enable g2o optimization" OFF)
-option(GTSAM_ON "Enable gtsam optimization" ON)
+option(GTSAM_ON "Enable gtsam optimization" OFF)
 
 find_program(CCACHE_PROGRAM ccache)
 
@@ -209,7 +209,10 @@ find_package(Eigen3 REQUIRED)
 find_package(GTSAM REQUIRED QUIET)
 find_package(sensor_msgs REQUIRED QUIET)
 find_package(image_transport REQUIRED)
+set(CMAKE_PREFIX_PATH "/home/zzy/SLAM/xfeat_cpp/thirdparty/pytorch/torch")
 message(111: ${cv_bridge_DIR})
+find_package(Torch REQUIRED)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 #set(CMAKE_PREFIX_PATH "/home/zg/depends/opencv-4.5.5/install")
 find_package(OpenCV REQUIRED QUIET)
 
@@ -222,6 +225,8 @@ if(GTSAM_ON)
     link_directories(${GTSAM_LIBRARY_DIRS})
     set(GTSAM_LIBRARIES gtsam)
 endif()
+
+set(ONNXRUNTIME_DIR  "/home/zzy/Downloads/onnxruntime")
 
 include_directories(
         include/DataIO
@@ -238,6 +243,9 @@ include_directories(
         include/Registrator/fast_gicp
         include/SensorProcess
         include/Viewer
+        include/xfeat
+        include/ImageProcess
+        include/MLSD
         ${EIGEN3_INCLUDE_DIR}
         ${PCL_INCLUDE_DIRS}
         ${CERES_INCLUDE_DIRS}
@@ -246,12 +254,15 @@ include_directories(
         ${YAML_CPP_INCLUDE_DIR}
         ${OpenCV_INCLUDE_DIRS}
         ${cv_bridge_INCLUDE_DIRS}
+        ${ONNXRUNTIME_DIR}/include
+        ${ONNXRUNTIME_DIR}/include/onnxruntime/core/session
+        ${ONNXRUNTIME_DIR}/include/onnxruntime/core/providers/cuda
         3rdParty/HesaiLidar_General_SDK/include
         include
 )
 
 #file(GLOB_RECURSE CORE_SRC "src/*.cpp" "src/*.cc" "src/*.c")
-
+link_directories("${ONNXRUNTIME_ROOT}/lib")
 
 file(GLOB_RECURSE DataIO_SRC "src/DataIO/*.cpp")
 add_library(DataIO SHARED ${DataIO_SRC})
@@ -310,6 +321,24 @@ file(GLOB_RECURSE LoopCloser_SRC "src/LoopCloser/*.cpp")
 add_library(LoopCloser SHARED ${LoopCloser_SRC})
 target_link_libraries(LoopCloser Misc Mapper Registrator Feature Optimizer DataIO ${PCL_LIBRARIES} ${PTHREADS_LIBRARY} ${CERES_LIBRARIES} gtsam)
 target_compile_definitions(LoopCloser PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
+
+file(GLOB_RECURSE xfeat_SRC "src/xfeat/*.cpp")
+add_library(xfeat SHARED ${xfeat_SRC})
+target_link_libraries(xfeat ${OpenCV_LIBS} ${TORCH_LIBRARIES} Misc Mapper Registrator Feature Optimizer DataIO ${PCL_LIBRARIES} ${PTHREADS_LIBRARY} ${CERES_LIBRARIES} gtsam)
+target_compile_definitions(xfeat PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
+
+file(GLOB_RECURSE imgp_SRC "src/ImageProcess/*.cpp")
+add_library(imgp SHARED ${imgp_SRC})
+target_link_libraries(imgp ${OpenCV_LIBS} ${PCL_LIBRARIES} Mapper)
+target_compile_definitions(imgp PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
+
+file(GLOB_RECURSE mlsd_SRC "src/MLSD/*.cpp")
+add_library(mlsd SHARED ${mlsd_SRC})
+target_link_libraries(mlsd ${OpenCV_LIBS} ${TORCH_LIBRARIES} onnxruntime ${PCL_LIBRARIES})
+target_compile_definitions(mlsd PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
+
+
+
 SET(cv_bridge_LIBRARIES "/opt/ros/melodic/lib/libcv_bridge.so")
 #file(GLOB_RECURSE SlamSys_SRC "src/System.cpp")
 if(MSVC)
@@ -329,6 +358,7 @@ if(MSVC)
             ${CORE_HDR}
             ${cv_bridge_LIBRARIES})
             
+            
 else()
     add_library(SlamCore
             SHARED
@@ -338,8 +368,8 @@ else()
             "src/System/System-utils.cpp")
 endif()
 
-target_link_libraries(SlamCore SensorProcess DataIO Feature Initializer LoopCloser Mapper Matcher Misc Optimizer Registrator Viewer 
-${PCL_LIBRARIES} ${PCAP_LIBRARIES} ${PTHREADS_LIBRARY} ${CERES_LIBRARIES} ${GTSAM_LIBRARIES} ${YAML_CPP_LIBRARIES} ${OpenCV_LIBRARIES}  ${cv_bridge_LIBRARIES} PandarGeneralSDK)
+target_link_libraries(SlamCore xfeat mlsd imgp SensorProcess DataIO Feature Initializer LoopCloser Mapper Matcher Misc Optimizer Registrator Viewer 
+${PCL_LIBRARIES} ${TORCH_LIBRARIES} ${PCAP_LIBRARIES} ${PTHREADS_LIBRARY} ${CERES_LIBRARIES} ${GTSAM_LIBRARIES} ${YAML_CPP_LIBRARIES} ${OpenCV_LIBRARIES}  ${cv_bridge_LIBRARIES} PandarGeneralSDK )
 
 target_compile_definitions(SlamCore PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
 
@@ -375,7 +405,7 @@ if(UNIX)
 #target_link_libraries(ZGSlamTest SlamCore ${PTHREADS_LIBRARY} ${catkin_LIBRARIES})
 
 add_executable(ZGSlamRosTest Examples/ZGSlamRosTest.cpp)
-target_link_libraries(ZGSlamRosTest SlamCore Misc ${PTHREADS_LIBRARY} ${catkin_LIBRARIES} ${cv_bridge_LIBRARIES} cv_bridge)
+target_link_libraries(ZGSlamRosTest SlamCore Misc ${PTHREADS_LIBRARY} ${catkin_LIBRARIES} ${cv_bridge_LIBRARIES} cv_bridge xfeat)
 
 #add_executable(RosSlamTest Examples/RosSlamTest.cpp)
 #target_link_libraries(RosSlamTest SlamCore ${PTHREADS_LIBRARY} ${catkin_LIBRARIES})

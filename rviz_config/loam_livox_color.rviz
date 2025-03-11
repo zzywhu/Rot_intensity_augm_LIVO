@@ -117,12 +117,6 @@ Visualization Manager:
           Value: true
       Enabled: true
       Name: mapping
-    - Class: rviz/Image
-      Enabled: true
-      Name: Intensity Image
-      Topic: /rigelslam_rot/intensity_img
-      Queue Size: 10
-      Transport Hint: raw
     - Class: rviz/Group
       Displays:
         - Angle Tolerance: 0.009999999776482582
@@ -162,6 +156,18 @@ Visualization Manager:
           Value: true
       Enabled: true
       Name: Odometry
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /rigelslam_rot/intensity_img
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Match Image
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Unreliable: false
+      Value: true
     - Alpha: 1
       Class: rviz/Axes
       Enabled: true

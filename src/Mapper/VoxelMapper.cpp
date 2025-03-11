@@ -1133,7 +1133,7 @@ void buildVoxelMap(const std::vector<PointWithCov> &inputPoints,
             featMap[position]->_newPointsNum++;
             featMap[position]->_allPointsNum++;
         }
-        else
+        else //new octo
         {
             OctoTree *octoTree = new OctoTree(frameId, pv.featType, maxLayer, 0, layerPointSize, maxPointsSize, maxCovPointsSize, featThreshold);
             featMap[position] = octoTree;

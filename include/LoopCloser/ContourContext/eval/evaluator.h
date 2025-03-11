@@ -314,8 +314,10 @@ public:
         std::string str_id = std::to_string(blockPtr->_idInStrip);
         str_id = "assigned_id_" + std::string(8 - str_id.length(), '0') + str_id;
 
-        cmng_ptr->makeBEV<PointType>(blockPtr->_pcDownAligned, str_id);
-        blockPtr->_pcDownAligned->clear();
+        // cmng_ptr->makeBEV<PointType>(blockPtr->_pcDownAligned, str_id);
+        // blockPtr->_pcDownAligned->clear();
+        cmng_ptr->makeBEV<PointType>(blockPtr->_pcDown, str_id);
+        blockPtr->_pcDown->clear();
         cmng_ptr->makeContoursRecurs();
 
         return cmng_ptr;

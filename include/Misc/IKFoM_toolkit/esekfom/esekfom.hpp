@@ -2324,6 +2324,7 @@ namespace esekfom
                 //K_x = K_ * h_x_;
                 Matrix<scalar_type, n, 1> dx_ = K_h + (K_x - Matrix<scalar_type, n, n>::Identity()) * dx_new;//Kz+(KH-I)*dx
                 state x_before = x_;
+                //std::cout<<dx_.transpose()<<std::endl;
                 x_.boxplus(dx_);
                 dyn_share.converge = true;
                 for (int i = 0; i < n; i++)
