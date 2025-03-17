@@ -37,6 +37,10 @@
 #include "Common.h"
 #include <mutex>
 #include <pcl/features/boundary.h>
+#include <thread>
+#include "MLSD/mlsd.h"
+#include <boost/circular_buffer.hpp>
+
 
 struct Matchlinelist
     {
@@ -50,6 +54,16 @@ struct Matchlinelist
 class imgProcesser
     {
     public:
+    std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> _sparsecloudbuffer;
+    std::vector<cv::Mat> _denseimgbuffer;
+    boost::circular_buffer<std::vector<Matchlinelist>> _matchlinelistbuffer;
+    boost::circular_buffer<pcl::PointCloud<pcl::PointXYZI>::Ptr> _sparselinecloudbuffer;
+    boost::circular_buffer<cv::Mat> _matchimgbuffer;
+    std::mutex _mutexBuf;
+    
+    M_LSD _lsd;
+    
+    std::thread* _imgThread;
     struct Plane
     {
     pcl::PointCloud<pcl::PointXYZI> cloud;
@@ -57,7 +71,16 @@ class imgProcesser
     Eigen::Vector3d normal;
     int index;
     };
-    
+    imgProcesser():_lsd(std::string(ROOT_DIR)+"weights/model_512x512_large.onnx"),
+    _imgThread(nullptr),
+    _matchlinelistbuffer(1),
+    _matchimgbuffer(1),
+    _sparselinecloudbuffer(1)
+    {
+    }
+    bool startThread();
+    void run();
+    void inputframedata(pcl::PointCloud<pcl::PointXYZI>::Ptr sparsecloud,cv::Mat denseimg);
     cv::Mat visualimg(cv::Mat img,std::vector<Matchlinelist>& matchlinelist);
     void buildmatchlinelist(std::vector<Matchlinelist>& matchlinelist, pcl::PointCloud<pcl::PointXYZI>::Ptr& _sparselinecloud, std::vector<std::vector<int>> segments_list);
     cv::Mat projectPinhole(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, cv::Mat scanlineIdMap, bool isinter);
@@ -181,9 +204,11 @@ class imgProcesser
                 }
             }
         }
+    
     private:
         int size_x;
         int size_y;
+
     };
 
      #endif

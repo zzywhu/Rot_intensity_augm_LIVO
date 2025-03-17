@@ -832,24 +832,40 @@ void System::imagecreatoropt()
         intensityMapsparse->points[i].z=_mapCloudQueue.back()->points[i].z;
         intensityMapsparse->points[i].intensity=_mapCloudQueue.back()->points[i].intensity;
     }
-
-    _imgProcesser.extractIntensityEdgesOptimized(intensityMapsparse,_sparselinecloud);
-    cv::Mat intensityImgsparse=_imgProcesser.projectPinhole(_sparselinecloud,_scanlineIdMap,false);
-    _intensityImg=_imgProcesser.fillHolesFast(_intensityImg);
-    cv::Mat colorintensityImg;
-    cv::cvtColor(_intensityImg, colorintensityImg, cv::COLOR_GRAY2BGR);
-    _cannyimg=_lsd.detect(colorintensityImg,_linelist);
-    _imgProcesser.buildmatchlinelist(_matchlinelist,_sparselinecloud, _linelist);
-
-    _matchImg=_imgProcesser.visualimg(colorintensityImg,_matchlinelist);
+    //std::this_thread::sleep_for(std::chrono::seconds(2));
+    _imgProcesser.inputframedata(intensityMapsparse,_intensityImg);
+    if(_imgProcesser._matchimgbuffer.size()>0)
+    {
+        _matchImg=_imgProcesser._matchimgbuffer.back();
+        _matchlinelist=_imgProcesser._matchlinelistbuffer.back();
+        //_sparselinecloud=_imgProcesser._sparselinecloudbuffer.back();
+    }
+    for(int i=0;i<_matchlinelist.size();i++)
+    {
+        _matchlinecloud->points.push_back(_matchlinelist[i].p3d);
+    }
+    _matchlinecloud->width=_matchlinecloud->size();
+    _matchlinecloud->height=1;
+    
+    //std::cout<<"1"<<std::endl;
+    //_matchImg=_imgProcesser._matchImg;
+    // _imgProcesser.extractIntensityEdgesOptimized(intensityMapsparse,_sparselinecloud);
+    // cv::Mat intensityImgsparse=_imgProcesser.projectPinhole(_sparselinecloud,_scanlineIdMap,false);
+    // _intensityImg=_imgProcesser.fillHolesFast(_intensityImg);
+    // cv::Mat colorintensityImg;
+    // cv::cvtColor(_intensityImg, colorintensityImg, cv::COLOR_GRAY2BGR);
+    // _cannyimg=_lsd.detect(colorintensityImg,_linelist);
+    // _imgProcesser.buildmatchlinelist(_matchlinelist,_sparselinecloud, _linelist);
+    
+    // _matchImg=_imgProcesser.visualimg(colorintensityImg,_matchlinelist);
    
 
-    if(_frameId%50==0)
-    {
-        cv::imwrite(string(ROOT_DIR)+"image/canny/"+to_string(_frameId)+".png",_cannyimg);
-        cv::imwrite(string(ROOT_DIR)+"image/over/"+to_string(_frameId)+".png",_matchImg);
-        cv::imwrite(string(ROOT_DIR)+"image/dense/"+to_string(_frameId)+".png",_intensityImg);
-    }
+    // if(_frameId%100==0)
+    // {
+    //     cv::imwrite(string(ROOT_DIR)+"image/canny/"+to_string(_frameId)+".png",_cannyimg);
+    //     cv::imwrite(string(ROOT_DIR)+"image/over/"+to_string(_frameId)+".png",_matchImg);
+    //     cv::imwrite(string(ROOT_DIR)+"image/dense/"+to_string(_frameId)+".png",_intensityImg);
+    // }
     _denseCloudMap->clear();
 }
 
@@ -1015,8 +1031,9 @@ void System::processCloudIKFoM()
     transCloud(_localCloudDownPtr, _globalCloudDownPtr, _Rwl, _twl);
     PointCloudXYZI::Ptr curWorldCloudPtr(new PointCloudXYZI());
     transCloud(_localCloudDownPtr, curWorldCloudPtr, _Rwl, _twl);
+    transCloud3(_matchlinecloud, _matchworldlinecloud, _Rwl, _twl);
     //PointCloudXYZI::Ptr curWorldPropCloudPtr(new PointCloudXYZI());
-    
+    _matchlinecloud->clear();
     //transCloud(_localCloudDownPtr, curWorldPropCloudPtr, _Rwlprop, _twlprop);
     
 
@@ -1040,6 +1057,8 @@ void System::processCloudIKFoM()
     }
 
     deleteUnstablePoints();
+
+    
 
     if(_mapCloudQueue.size()<=70){
         _mapCloudQueue.push_back(curWorldCloudPtr);

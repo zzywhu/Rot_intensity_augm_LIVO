@@ -1763,6 +1763,8 @@ void System::loadParams(const std::string &filePath)
 
 bool System::initSystem()
 {
+    _imgProcesser.startThread();
+    std::cout << "imgprocesser started!" << std::endl;
     if (_config._isEnable3DViewer)
     {
         initPCLViewer();

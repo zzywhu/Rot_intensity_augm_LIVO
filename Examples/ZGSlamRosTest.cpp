@@ -73,6 +73,7 @@ POINT_CLOUD_REGISTER_POINT_STRUCT(Hesai_ZG_ros::Point,
 
 bool _exitFlag=false;
 std::string _lidTopic="/ZG/lidar";
+std::string _lineTopic="/rigelslam_rot/lidar/mapping/cloudline";
 std::string _imuTopic="/ZG/IMU_data";
 std::string _motorTopic="/ZG/Motor";
 std::string _imgTopic = "/rigelslam_rot/intensity_img";
@@ -223,6 +224,17 @@ void publishFrameGlobal(const ros::Publisher & pubLaserCloudFull)
     laserCloudmsg.header.frame_id = "odom";
     pubLaserCloudFull.publish(laserCloudmsg);
 }
+
+void publishMapline(const ros::Publisher & pubLaserCloudFull)
+{
+    sensor_msgs::PointCloud2 laserCloudmsg;
+    pcl::toROSMsg(*_sys->_matchworldlinecloud, laserCloudmsg);
+    _addedMapCloud.reset(new PointCloudXYZI());
+    laserCloudmsg.header.stamp = ros::Time().fromSec(_sys->_lidarEndTime);
+    laserCloudmsg.header.frame_id = "odom";
+    pubLaserCloudFull.publish(laserCloudmsg);
+}
+
 
 void publishMapIncremental(const ros::Publisher & pubLaserCloudFull)
 {
@@ -1489,6 +1501,7 @@ int main(int argc, char **argv)
                                                                          &captureControlMarkerHandler,
                                                                          nullptr, ros::TransportHints().tcpNoDelay());
     ros::Publisher pubImg = _nh.advertise<sensor_msgs::Image>(_imgTopic, 1);
+    ros::Publisher publine = _nh.advertise<sensor_msgs::PointCloud2>(_lineTopic, 1);
     ros::Publisher pubMap = _nh.advertise<sensor_msgs::PointCloud2>(_mapTopic, 1);
     ros::Publisher pubPath = _nh.advertise<nav_msgs::Path>(_pathTopic, 1);
     ros::Publisher pubOdomAftMapped = _nh.advertise<nav_msgs::Odometry> (_odomTopic, 10);
@@ -1644,6 +1657,7 @@ int main(int argc, char **argv)
             // }
             publishImage(pubImg);
             publishPath(pubPath);
+            publishMapline(publine);
             publishOdometry(pubOdomAftMapped);
             publishFrameBody(pubLaserCloudFullBody);
             //publishMap(pubMap);

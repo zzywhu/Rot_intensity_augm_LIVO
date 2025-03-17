@@ -327,15 +327,15 @@ add_library(xfeat SHARED ${xfeat_SRC})
 target_link_libraries(xfeat ${OpenCV_LIBS} ${TORCH_LIBRARIES} Misc Mapper Registrator Feature Optimizer DataIO ${PCL_LIBRARIES} ${PTHREADS_LIBRARY} ${CERES_LIBRARIES} gtsam)
 target_compile_definitions(xfeat PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
 
-file(GLOB_RECURSE imgp_SRC "src/ImageProcess/*.cpp")
-add_library(imgp SHARED ${imgp_SRC})
-target_link_libraries(imgp ${OpenCV_LIBS} ${PCL_LIBRARIES} Mapper)
-target_compile_definitions(imgp PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
-
 file(GLOB_RECURSE mlsd_SRC "src/MLSD/*.cpp")
 add_library(mlsd SHARED ${mlsd_SRC})
 target_link_libraries(mlsd ${OpenCV_LIBS} ${TORCH_LIBRARIES} onnxruntime ${PCL_LIBRARIES})
 target_compile_definitions(mlsd PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
+
+file(GLOB_RECURSE imgp_SRC "src/ImageProcess/*.cpp")
+add_library(imgp SHARED ${imgp_SRC})
+target_link_libraries(imgp ${OpenCV_LIBS} ${PCL_LIBRARIES} Mapper mlsd) 
+target_compile_definitions(imgp PRIVATE $<$<CXX_COMPILER_ID:MSVC>:__DLL_EXPORTS__>)
 
 
 

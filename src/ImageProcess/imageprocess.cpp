@@ -12,6 +12,90 @@ std::vector<imgProcesser::Plane> plane_list;
 
             // inliers????????????????????????
 pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+bool imgProcesser::startThread()
+{
+    _imgThread=new std::thread(&imgProcesser::run,this);
+    if (!_imgThread)
+        return false;
+    return true;
+}
+void imgProcesser::inputframedata(pcl::PointCloud<pcl::PointXYZI>::Ptr sparsecloud,cv::Mat denseimg)
+{
+    pcl::PointCloud<pcl::PointXYZI>::Ptr tempsparsecloud (new pcl::PointCloud<pcl::PointXYZI>);
+    tempsparsecloud->width=sparsecloud->width;
+    tempsparsecloud->height=sparsecloud->height;
+    tempsparsecloud->resize(sparsecloud->size());
+    for(int i=0;i<sparsecloud->size();i++)
+    {
+        tempsparsecloud->points[i].x=sparsecloud->points[i].x;
+        tempsparsecloud->points[i].y=sparsecloud->points[i].y;
+        tempsparsecloud->points[i].z=sparsecloud->points[i].z;
+        tempsparsecloud->points[i].intensity=sparsecloud->points[i].intensity;
+    }
+    _sparsecloudbuffer.push_back(tempsparsecloud);
+    _denseimgbuffer.push_back(denseimg);
+}
+
+void imgProcesser::run()
+{
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cursparsecloud(new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::PointCloud<pcl::PointXYZI>::Ptr sparselinecloud(new pcl::PointCloud<pcl::PointXYZI>);
+    
+    cv::Mat _matchImg;
+    cv::Mat curdenseimg;
+    cv::Mat cannyimg;
+    bool hasdata=false;
+    while(1)
+    {
+        _mutexBuf.lock();
+        std::vector<std::vector<int>> linelist;
+        std::vector<Matchlinelist> _matchlinelist;
+        if(_sparsecloudbuffer.size()>0)
+        {
+            std::cout<<"get img framedata"<<std::endl;
+            cursparsecloud=_sparsecloudbuffer.front();
+            curdenseimg=_denseimgbuffer.front();
+            
+            _sparsecloudbuffer.erase(_sparsecloudbuffer.begin());
+            _denseimgbuffer.erase(_denseimgbuffer.begin());
+            hasdata=true;
+        }
+        _mutexBuf.unlock();
+        if(hasdata)
+        {
+            _mutexBuf.lock();
+            
+            extractIntensityEdgesOptimized(cursparsecloud,sparselinecloud);
+            
+            // cv::Mat intensityImgsparse=_imgProcesser.projectPinhole(_sparselinecloud,_scanlineIdMap,false);
+            curdenseimg=fillHolesFast(curdenseimg);
+            
+            cv::Mat colorintensityImg;
+            cv::cvtColor(curdenseimg, colorintensityImg, cv::COLOR_GRAY2BGR);
+            cannyimg=_lsd.detect(colorintensityImg,linelist);
+            buildmatchlinelist(_matchlinelist,sparselinecloud, linelist);
+            _matchImg=visualimg(colorintensityImg,_matchlinelist);
+            _matchimgbuffer.push_back(_matchImg);
+            _matchlinelistbuffer.push_back(_matchlinelist);
+            //_sparselinecloudbuffer.push_back(sparselinecloud);
+            hasdata=false;
+        
+            // if(_frameId%100==0)
+            // {
+            //     cv::imwrite(string(ROOT_DIR)+"image/canny/"+to_string(_frameId)+".png",_cannyimg);
+            //     cv::imwrite(string(ROOT_DIR)+"image/over/"+to_string(_frameId)+".png",_matchImg);
+            //     cv::imwrite(string(ROOT_DIR)+"image/dense/"+to_string(_frameId)+".png",_intensityImg);
+            // }
+            _mutexBuf.unlock();
+        }
+        if(!hasdata)
+        {
+            continue;
+        }
+
+    }
+}
+
 cv::Mat imgProcesser::visualimg(cv::Mat img,std::vector<Matchlinelist>& matchlinelist)
 {
     cv::Mat visualImage = img.clone();
@@ -226,9 +310,9 @@ void imgProcesser::extractIntensityEdgesOptimized(const pcl::PointCloud<pcl::Poi
     // 清空输出点云
     intensity_edge->clear();
     float radius = 0.2;
-    float threshold = 10;
-    float voxel_size = 2;
-    int points_per_voxel = 10;
+    float threshold = 5;
+    float voxel_size = 1;
+    int points_per_voxel = 5;
     
     // 如果输入为空则返回
     if (input_cloud->empty()) {

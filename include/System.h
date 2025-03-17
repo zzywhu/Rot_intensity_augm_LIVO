@@ -312,7 +312,6 @@ public:
                _dt(0.0),
                _mapCloudQueue(200),
                _XFDetector(4096,0.5,true),
-               _lsd(std::string(ROOT_DIR)+"weights/model_512x512_large.onnx"),
                _loopCloser(nullptr),
                _isLoopCorrected(false),
                _isFirstLidarFrame(true),
@@ -321,6 +320,9 @@ public:
                _globalCloudXYZPtr(new pcl::PointCloud<pcl::PointXYZ>),
                _localCloudXYZPtr(new pcl::PointCloud<pcl::PointXYZ>),
                _sparselinecloud(new pcl::PointCloud<pcl::PointXYZI>),
+               _sparseworldlinecloud(new pcl::PointCloud<pcl::PointXYZI>),
+               _matchlinecloud(new pcl::PointCloud<pcl::PointXYZI>),
+               _matchworldlinecloud(new pcl::PointCloud<pcl::PointXYZI>),
                _Twl(Eigen::Matrix4d::Identity()),
                _rotAlign(Eigen::Matrix3d::Identity()),
                _normvec(new PointCloudXYZI(100000, 1)),
@@ -437,7 +439,11 @@ public:
     void transCloud(const PointCloudXYZI::Ptr &cloudIn, PointCloudXYZI::Ptr &cloudOut,
                     const Eigen::Matrix3d &Rol, const Eigen::Vector3d &tol);
     void transCloud2(const PointCloudXYZI::Ptr &cloudIn, pcl::PointCloud<pcl::PointXYZI>::Ptr &cloudOut,
-        const Eigen::Matrix3d &Rol, const Eigen::Vector3d &tol);                
+        const Eigen::Matrix3d &Rol, const Eigen::Vector3d &tol);     
+    void transCloud3(const pcl::PointCloud<pcl::PointXYZI>::Ptr &cloudIn, 
+            pcl::PointCloud<pcl::PointXYZI>::Ptr &cloudOut,
+            const Eigen::Matrix3d &Rol, 
+            const Eigen::Vector3d &tol);          
 
     void transCloudInMotorAxis(const PointCloudXYZI::Ptr &cloudIn, PointCloudXYZI::Ptr &cloudOut,
                                const double &angle, const Eigen::Matrix3d &Rol, const Eigen::Vector3d &tol);
@@ -624,7 +630,6 @@ public:
     int                                                                                    _cloudDownSize;
     int                                                                                    _cloudSurfDownSize;
     int                                                                                    _cloudCornerDownSize;
-    M_LSD                                                                                  _lsd;
     PointCloudXYZI::Ptr                                                                    _localCloudPtr;
     PointCloudXYZI::Ptr                                                                    _localSurfCloudPtr;
     PointCloudXYZI::Ptr                                                                    _localCornerCloudPtr;
@@ -643,6 +648,9 @@ public:
     PointCloudXYZI::Ptr                                                                    _denseCloudMap;
     PointCloudXYZI::Ptr                                                                    _trajCloud;
     pcl::PointCloud<pcl::PointXYZI>::Ptr                                                   _sparselinecloud;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr                                                   _sparseworldlinecloud;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr                                                   _matchlinecloud;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr                                                   _matchworldlinecloud;
     cv::Mat                                                                                _cannyimg;
 
     vector<PointVector>                                                                    _nearestPoints;
