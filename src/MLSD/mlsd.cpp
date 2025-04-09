@@ -7,7 +7,7 @@ using namespace Ort;
 
 M_LSD::M_LSD(string model_path)
 {
-	std::wstring widestr = std::wstring(model_path.begin(), model_path.end());  ////windows写法
+	//std::wstring widestr = std::wstring(model_path.begin(), model_path.end());  ////windows写法
 	OrtStatus* status = OrtSessionOptionsAppendExecutionProvider_CUDA(sessionOptions, 0);   ///如果使用cuda加速，需要取消注释
 
 	sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_BASIC);

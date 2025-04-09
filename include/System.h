@@ -18,6 +18,7 @@
 #include <Eigen/Core>
 #include <csignal>
 #include <fstream>
+#include <tuple>
 #include <iomanip>
 #include <math.h>
 #include <mutex>
@@ -111,6 +112,7 @@ class SYSTEM_API System
         bool _isImuInitialized;
         bool _isFeatExtractEn;
         bool _isEstiExtrinsic;
+        bool _isUseIntensity;
         int _featureExtractSegNum;
         int _minFramePoint;
         int _nSkipFrames;
@@ -166,7 +168,7 @@ class SYSTEM_API System
         int _marginSize;
 
         bool _isLoopEn;
-
+        bool _issavemap;
         bool _isSaveMap;
         int  _pcdSaveInterval;
 
@@ -320,11 +322,17 @@ public:
                _globalCloudXYZPtr(new pcl::PointCloud<pcl::PointXYZ>),
                _localCloudXYZPtr(new pcl::PointCloud<pcl::PointXYZ>),
                _sparselinecloud(new pcl::PointCloud<pcl::PointXYZI>),
+               _curlinecloud(new pcl::PointCloud<pcl::PointXYZI>),
                _sparseworldlinecloud(new pcl::PointCloud<pcl::PointXYZI>),
                _matchlinecloud(new pcl::PointCloud<pcl::PointXYZI>),
                _matchworldlinecloud(new pcl::PointCloud<pcl::PointXYZI>),
+               _matchworldlinecloudrgb(new pcl::PointCloud<pcl::PointXYZRGB>),
+                intensityMapdense(new pcl::PointCloud<pcl::PointXYZI>),
+                intensityMapdense_left(new pcl::PointCloud<pcl::PointXYZI>),
+                intensityMapdense_right(new pcl::PointCloud<pcl::PointXYZI>),
                _Twl(Eigen::Matrix4d::Identity()),
                _rotAlign(Eigen::Matrix3d::Identity()),
+               _rotAlign_traj(Eigen::Matrix3d::Identity()),
                _normvec(new PointCloudXYZI(100000, 1)),
                _cloudAxisTransfer(nullptr),
                _frameIdDisp(0),
@@ -443,7 +451,8 @@ public:
     void transCloud3(const pcl::PointCloud<pcl::PointXYZI>::Ptr &cloudIn, 
             pcl::PointCloud<pcl::PointXYZI>::Ptr &cloudOut,
             const Eigen::Matrix3d &Rol, 
-            const Eigen::Vector3d &tol);          
+            const Eigen::Vector3d &tol);     
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertPointCloudWithLines(const pcl::PointCloud<pcl::PointXYZI>::Ptr& input_cloud);     
 
     void transCloudInMotorAxis(const PointCloudXYZI::Ptr &cloudIn, PointCloudXYZI::Ptr &cloudOut,
                                const double &angle, const Eigen::Matrix3d &Rol, const Eigen::Vector3d &tol);
@@ -497,7 +506,8 @@ public:
                     KD_TREE &kdTree, MatchedInfoList &matches);
 
     void saveMap(bool isForced=false);
-
+    void Savemap();
+    void Savetraj();
     void motorMotionCompensation();
 
     void motorMotionCompensationZG();
@@ -635,7 +645,14 @@ public:
     PointCloudXYZI::Ptr                                                                    _localCornerCloudPtr;
     boost::circular_buffer<PointCloudXYZI::Ptr>                                            _mapCloudQueue;
     cv::Mat                                                                                _intensityImg;
+    cv::Mat                                                                                _intensityImg_left;
+    cv::Mat                                                                                _intensityImg_right;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr                                                   intensityMapdense;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr                                                   intensityMapdense_left;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr                                                   intensityMapdense_right;
     cv::Mat                                                                                _matchImg;
+    cv::Mat                                                                                _matchImg_left;
+    cv::Mat                                                                                _matchImg_right;
     PointCloudXYZI::Ptr                                                                    _localCloudDownPtr;
     PointCloudXYZI::Ptr                                                                    _localSurfCloudDownPtr;
     PointCloudXYZI::Ptr                                                                    _localCornerCloudDownPtr;
@@ -648,9 +665,11 @@ public:
     PointCloudXYZI::Ptr                                                                    _denseCloudMap;
     PointCloudXYZI::Ptr                                                                    _trajCloud;
     pcl::PointCloud<pcl::PointXYZI>::Ptr                                                   _sparselinecloud;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr                                                   _curlinecloud;
     pcl::PointCloud<pcl::PointXYZI>::Ptr                                                   _sparseworldlinecloud;
     pcl::PointCloud<pcl::PointXYZI>::Ptr                                                   _matchlinecloud;
     pcl::PointCloud<pcl::PointXYZI>::Ptr                                                   _matchworldlinecloud;
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr                                                 _matchworldlinecloudrgb;
     cv::Mat                                                                                _cannyimg;
 
     vector<PointVector>                                                                    _nearestPoints;
@@ -691,6 +710,8 @@ public:
     Eigen::Vector3d                                                                        _twl;
     Eigen::Matrix3d                                                                        _Rwlprop;
     Eigen::Vector3d                                                                        _twlprop;
+    Eigen::Matrix3d                                                                        _Rl2l;
+    Eigen::Vector3d                                                                        _tl2l;
     Eigen::Matrix4d                                                                        _prevTwl;
 
     std::vector<Eigen::Matrix4d>                                                           _relToList;
@@ -814,7 +835,11 @@ public:
     std::vector<PointWithCov>                                                              _curCornerPvList;
     std::vector<BoxPointType>                                                              _boxToDel;
     std::vector<std::vector<int>>                                                          _linelist;
+    std::vector<std::vector<int>>                                                          _linelist_left;
+    std::vector<std::vector<int>>                                                          _linelist_right;
     std::vector<Matchlinelist>                                                             _matchlinelist;
+    std::vector<Matchlinelist>                                                             _matchlinelist_left;
+    std::vector<Matchlinelist>                                                             _matchlinelist_right;
 
     LoopCloser*                                                                            _loopCloser;
     bool                                                                                   _isLoopCorrected;
@@ -834,7 +859,7 @@ public:
 
     Eigen::Vector3d                                                                        _globalGrav;
     Eigen::Matrix3d                                                                        _rotAlign;
-
+    Eigen::Matrix3d                                                                        _rotAlign_traj;
     PointCloudXYZI::Ptr                                                                    _normvec;
     bool*                                                                                  _isPointSelectedSurf;
     float*                                                                                 _resLast;

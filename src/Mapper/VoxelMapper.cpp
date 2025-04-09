@@ -1270,7 +1270,7 @@ void buildSingleResidual(const PointWithCov &pv, OctoTree *currentOcto,
                          const double sigmaNum, bool &isSucess,
                          double &prob, MatchOctoTreeInfo &singlePtpl, bool isStrict)
 {
-    double radius_k = 3;
+    double radius_k = 1.5; //1 for stair building 3 for normal scene
     Eigen::Vector3d p_w = pv.pw;
 
     if (currentOcto->_planePtr->isPlane)

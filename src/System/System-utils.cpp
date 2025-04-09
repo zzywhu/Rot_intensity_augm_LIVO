@@ -78,6 +78,120 @@ cloudOut->points[i].z = po[2];
 cloudOut->points[i].intensity = pb.intensity;
 }
 }
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr 
+System::convertPointCloudWithLines(const pcl::PointCloud<pcl::PointXYZI>::Ptr& input_cloud) {
+    // 创建输出点云
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr output_cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+    
+    // 定义每条线上的点数
+    int line_resolution = 500; // 可以根据需要调整
+    
+    // 为输出点云预分配空间（原始点+连线点）
+    // 每个原始点有一条连线，每条连线有line_resolution+1个点
+    output_cloud->reserve(input_cloud->size() * (1 + line_resolution + 1));
+    
+    // 定义颜色：蓝色(RGB: 0, 0, 255)和黄色(RGB: 255, 255, 0)
+    uint8_t r = 0, g = 245, b = 255;
+    uint8_t r_left = 106, g_left = 90, b_left = 205;
+    uint8_t r_right = 139, g_right = 139, b_right = 0;
+    // 首先将所有输入点转换为蓝色点
+    for (const auto& point : input_cloud->points) {
+        pcl::PointXYZRGB colored_point;
+        if(point.intensity==0)
+        {
+// 复制XYZ坐标
+colored_point.x = point.x;
+colored_point.y = point.y;
+colored_point.z = point.z;
+
+// 设置为蓝色
+colored_point.r = r;
+colored_point.g = g;
+colored_point.b = b;
+
+// 添加到输出点云
+output_cloud->push_back(colored_point);
+        }
+        if(point.intensity==1)
+        {
+// 复制XYZ坐标
+colored_point.x = point.x;
+colored_point.y = point.y;
+colored_point.z = point.z;
+
+// 设置为蓝色
+colored_point.r = r_left;
+colored_point.g =g_left;
+colored_point.b = b_left;
+
+// 添加到输出点云
+output_cloud->push_back(colored_point);
+        }
+        if(point.intensity==2)
+        {
+// 复制XYZ坐标
+colored_point.x = point.x;
+colored_point.y = point.y;
+colored_point.z = point.z;
+
+// 设置为蓝色
+colored_point.r = r_right;
+colored_point.g = g_right;
+colored_point.b = b_right;
+
+// 添加到输出点云
+output_cloud->push_back(colored_point);
+        }
+        
+        // 添加连线：从当前点到原点的黄色线段
+    // 通过在直线上生成多个点来模拟连续线段
+    //int line_resolution = 50; // 每条线上的点数，可以根据需要调整
+    
+    for (int j = 0; j <= line_resolution; ++j) {
+        // 计算当前点与原点之间的插值比例
+        float ratio = static_cast<float>(j) / line_resolution;
+        
+        // 创建线段上的点
+        pcl::PointXYZRGB line_point;
+        
+        // 线性插值计算点的坐标
+        // 从当前点(point.x, point.y, point.z)到原点(0, 0, 0)
+
+        line_point.x = point.x * (1.0f - ratio);
+        line_point.y = point.y * (1.0f - ratio);
+        line_point.z = point.z * (1.0f - ratio);
+        
+
+        if(point.intensity==0)
+        {
+           // 设置为黄色
+        line_point.r = r;
+        line_point.g = g;
+        line_point.b = b; 
+        }
+        if(point.intensity==1)
+        {
+           // 设置为黄色
+        line_point.r = r_left;
+        line_point.g = g_left;
+        line_point.b = b_left; 
+        }
+        if(point.intensity==2)
+        {
+           // 设置为黄色
+        line_point.r = r_right;
+        line_point.g = g_right;
+        line_point.b = b_right; 
+        }
+        
+        // 添加线段点到输出点云
+        output_cloud->push_back(line_point);
+    }
+    }
+    
+    return output_cloud;
+}
+
 void System::transCloud3(const pcl::PointCloud<pcl::PointXYZI>::Ptr &cloudIn, 
                          pcl::PointCloud<pcl::PointXYZI>::Ptr &cloudOut,
                          const Eigen::Matrix3d &Rol, 
@@ -354,6 +468,73 @@ void System::correctLoop()
     _loopCloser->getProcessLock().unlock();
 }
 
+void System::Savetraj()
+{
+        std::ofstream fout(string(ROOT_DIR) + "MapResult/traj.txt",std::ios::out);
+                const Matrix4ds& relPoses=_loopCloser->getRelPoses();
+                CloudBlockPtrs submaps=_loopCloser->getSubMapBlocks();
+               
+                for(auto& submap:submaps)
+                {
+                    const int& firstIdx=submap->_uniqueId;
+                    const int& lastIdx=submap->_lastFrameId;
+
+                    for(int i=firstIdx;i<=lastIdx;i++)
+                    {
+                        CloudBlockPtr frameBlock=_loopCloser->getFrameBlock(i);
+                        if(i==firstIdx)
+                            frameBlock->_poseLo=submap->_poseLo;
+                        else
+                            frameBlock->_poseLo=_loopCloser->getFrameBlock(i-1)->_poseLo*relPoses[i-1];
+
+                        frameBlock->freeAll();
+                        Eigen::Vector3d pose(frameBlock->_poseLo(0, 3),frameBlock->_poseLo(1, 3),frameBlock->_poseLo(2, 3));
+                        pose=_rotAlign_traj*pose;
+                        //correct imu poses by relposes
+           fout<<i<<" "<<pose(0)<<" "<<pose(1)<<" "<<pose(2)<<" "<<"0 "<<"0 "<<"0 "<<"1"<<std::endl;
+                    }
+        }
+}
+
+
+void System::Savemap()
+{
+        PointCloudXYZI::Ptr pgoCloudPtr(new PointCloudXYZI());
+        PointCloudXYZI::Ptr trajCloud(new PointCloudXYZI());
+                const Matrix4ds& relPoses=_loopCloser->getRelPoses();
+                CloudBlockPtrs submaps=_loopCloser->getSubMapBlocks();
+               
+                for(auto& submap:submaps)
+                {
+                    const int& firstIdx=submap->_uniqueId;
+                    const int& lastIdx=submap->_lastFrameId;
+
+                    for(int i=firstIdx;i<=lastIdx;i++)
+                    {
+                        CloudBlockPtr frameBlock=_loopCloser->getFrameBlock(i);
+                        if(i==firstIdx)
+                            frameBlock->_poseLo=submap->_poseLo;
+                        else
+                            frameBlock->_poseLo=_loopCloser->getFrameBlock(i-1)->_poseLo*relPoses[i-1];
+
+                        frameBlock->freeAll();
+                        //correct imu poses by relposes
+           PointCloudXYZI::Ptr frameCloud(new PointCloudXYZI());
+           pcl::io::loadPCDFile(frameBlock->_pcdFilePath, *frameBlock->_pcRaw);
+           pcl::transformPointCloud(*frameBlock->_pcRaw, *frameCloud, frameBlock->_poseLo);//pw=Tw1*p1
+           *pgoCloudPtr+=*frameCloud;
+           
+           PointType trajPt;
+           trajPt.x = frameBlock->_poseLo(0, 3);
+           trajPt.y = frameBlock->_poseLo(1, 3);
+           trajPt.z = frameBlock->_poseLo(2, 3);
+           trajCloud->push_back(trajPt) ;
+                    }
+        }
+        pcl::PCDWriter pcdWriter;
+        pcdWriter.writeBinary(string(ROOT_DIR) + "MapResult/TrajCloud.pcd", *trajCloud);
+        pcdWriter.writeBinary(string(ROOT_DIR) + "MapResult/MapCloud.pcd", *pgoCloudPtr);
+}
 void System::saveMap(bool isForced)
 {
     static pcl::PCDWriter pcdWriter;

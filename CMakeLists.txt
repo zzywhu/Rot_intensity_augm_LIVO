@@ -203,12 +203,19 @@ find_package(cv_bridge REQUIRED)
 find_package(PythonLibs REQUIRED)
 # find_path(MATPLOTLIB_CPP_INCLUDE_DIRS "matplotlibcpp.h")
 find_package(PCL 1.7 REQUIRED)
+message(STATUS "Found PCL version: ${PCL_VERSION}")
+
 find_package(Ceres REQUIRED)
+message(STATUS "Found Ceres version: ${Ceres_VERSION}")
+
 find_package(yaml-cpp REQUIRED)
+message(STATUS "Found yaml-cpp version: ${YAML_CPP_VERSION}")
+
 find_package(Eigen3 REQUIRED)
+message(STATUS "Found Eigen3 version: ${EIGEN3_VERSION}")
+
 find_package(GTSAM REQUIRED QUIET)
-find_package(sensor_msgs REQUIRED QUIET)
-find_package(image_transport REQUIRED)
+message(STATUS "Found GTSAM version: ${GTSAM_VERSION}")
 set(CMAKE_PREFIX_PATH "/home/zzy/SLAM/xfeat_cpp/thirdparty/pytorch/torch")
 message(111: ${cv_bridge_DIR})
 find_package(Torch REQUIRED)

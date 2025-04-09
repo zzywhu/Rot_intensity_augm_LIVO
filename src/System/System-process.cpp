@@ -820,8 +820,7 @@ void System::imagecreatoropt()
     pcl::PointCloud<pcl::PointXYZI>::Ptr intensityMapdense(new pcl::PointCloud<pcl::PointXYZI>);
     pcl::PointCloud<pcl::PointXYZI>::Ptr intensityMapsparse(new pcl::PointCloud<pcl::PointXYZI>);
     transCloud2(_denseCloudMap, intensityMapdense,_statePropIkfom.rot.matrix().inverse(),-_statePropIkfom.rot.matrix().inverse()*_statePropIkfom.pos);
-    _intensityImg=_imgProcesser.projectPinhole(intensityMapdense,_scanlineIdMap,false);
-
+    _denseCloudMap->clear();
     intensityMapsparse->width=_mapCloudQueue.back()->size();
     intensityMapsparse->height=1;
     intensityMapsparse->resize(_mapCloudQueue.back()->size());
@@ -833,40 +832,30 @@ void System::imagecreatoropt()
         intensityMapsparse->points[i].intensity=_mapCloudQueue.back()->points[i].intensity;
     }
     //std::this_thread::sleep_for(std::chrono::seconds(2));
-    _imgProcesser.inputframedata(intensityMapsparse,_intensityImg);
-    if(_imgProcesser._matchimgbuffer.size()>0)
-    {
-        _matchImg=_imgProcesser._matchimgbuffer.back();
-        _matchlinelist=_imgProcesser._matchlinelistbuffer.back();
-        //_sparselinecloud=_imgProcesser._sparselinecloudbuffer.back();
-    }
-    for(int i=0;i<_matchlinelist.size();i++)
-    {
-        _matchlinecloud->points.push_back(_matchlinelist[i].p3d);
-    }
-    _matchlinecloud->width=_matchlinecloud->size();
-    _matchlinecloud->height=1;
+    auto data_process_start = std::chrono::high_resolution_clock::now();  
+    // transCloud3(intensityMapdense, intensityMapdense_left, _imgProcesser.Rleft, Eigen::Vector3d(0,0,0));
+    // transCloud3(intensityMapdense, intensityMapdense_right, _imgProcesser.Rright, Eigen::Vector3d(0,0,0));
+    // _intensityImg = _imgProcesser.projectPinhole(intensityMapdense, false);
+    // _intensityImg_left = _imgProcesser.projectPinhole(intensityMapdense_left, false);
+    // _intensityImg_right = _imgProcesser.projectPinhole(intensityMapdense_right, false);
+    auto [img, img_left, img_right] = _imgProcesser.projectPinholeall(
+        intensityMapdense, 
+        _imgProcesser.Rleft, 
+        _imgProcesser.Rright, 
+        false);
+    _intensityImg = img;
+    _intensityImg_left = img_left;
+    _intensityImg_right = img_right;
     
-    //std::cout<<"1"<<std::endl;
-    //_matchImg=_imgProcesser._matchImg;
-    // _imgProcesser.extractIntensityEdgesOptimized(intensityMapsparse,_sparselinecloud);
-    // cv::Mat intensityImgsparse=_imgProcesser.projectPinhole(_sparselinecloud,_scanlineIdMap,false);
-    // _intensityImg=_imgProcesser.fillHolesFast(_intensityImg);
-    // cv::Mat colorintensityImg;
-    // cv::cvtColor(_intensityImg, colorintensityImg, cv::COLOR_GRAY2BGR);
-    // _cannyimg=_lsd.detect(colorintensityImg,_linelist);
-    // _imgProcesser.buildmatchlinelist(_matchlinelist,_sparselinecloud, _linelist);
+    auto data_process_end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> data_process_time = data_process_end - data_process_start;
+    std::cout << "project time: " << data_process_time.count() << " ms" << std::endl;
+    _imgProcesser.inputframedata(intensityMapsparse,_intensityImg,_intensityImg_left,_intensityImg_right);
     
-    // _matchImg=_imgProcesser.visualimg(colorintensityImg,_matchlinelist);
-   
-
-    // if(_frameId%100==0)
-    // {
-    //     cv::imwrite(string(ROOT_DIR)+"image/canny/"+to_string(_frameId)+".png",_cannyimg);
-    //     cv::imwrite(string(ROOT_DIR)+"image/over/"+to_string(_frameId)+".png",_matchImg);
-    //     cv::imwrite(string(ROOT_DIR)+"image/dense/"+to_string(_frameId)+".png",_intensityImg);
-    // }
-    _denseCloudMap->clear();
+    if(_mapCloudQueue.size()==72)
+    {
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+    }
 }
 
 void System::processCloudIKFoM()
@@ -876,7 +865,12 @@ void System::processCloudIKFoM()
     _imuProcessor->Process(_measures, _kf, _localCloudPtr);
     _stateIkfom = _kf.get_x();//udpate state
     _statePropIkfom=_stateIkfom;
-  
+    _Rwlprop=_statePropIkfom.rot.matrix()*_statePropIkfom.offset_R_L_I;
+    _twlprop=_statePropIkfom.rot.matrix()*_statePropIkfom.offset_T_L_I+_stateIkfom.pos;
+    if(_mapCloudQueue.size()>70){
+        _mapCloudQueue.push_back(_localCloudPtr);
+        imagecreatoropt();
+    }
     if(_imuProcessor->imu_need_init())
         return;
 
@@ -936,6 +930,7 @@ void System::processCloudIKFoM()
     if (!_isInitMap)
     {
         _globalGrav=Eigen::Vector3d(_stateIkfom.grav.get_vect());
+        _rotAlign_traj=Eigen::Quaterniond::FromTwoVectors(_globalGrav,V3D(0,0,-1)).toRotationMatrix();
         if(_config._enableGravityAlign)
         {
             _rotAlign= Eigen::Quaterniond::FromTwoVectors(_globalGrav,V3D(0,0,-1)).toRotationMatrix();//Rw'w
@@ -1001,15 +996,43 @@ void System::processCloudIKFoM()
 
     double solveTime=0;
 
-    _Rwlprop=_statePropIkfom.rot.matrix()*_statePropIkfom.offset_R_L_I;
-    _twlprop=_statePropIkfom.rot.matrix()*_statePropIkfom.offset_T_L_I+_stateIkfom.pos;
-    if(_mapCloudQueue.size()>70){
-        _mapCloudQueue.push_back(_localCloudDownPtr);
-        imagecreatoropt();
+    
+    //update imageprocesser
+    if(_imgProcesser._matchimgbuffer.size()==1&&_imgProcesser._matchimgbuffer_right.size()==1
+    &&_imgProcesser._matchimgbuffer_left.size()==1)
+    {
+    _matchImg=_imgProcesser._matchimgbuffer.back();
+    _matchImg_left=_imgProcesser._matchimgbuffer_left.back();
+    _matchImg_right=_imgProcesser._matchimgbuffer_right.back();
+    _matchlinelist=_imgProcesser._matchlinelistbuffer.back();
+    _matchlinelist_left=_imgProcesser._matchlinelistbuffer_left.back();
+    _matchlinelist_right=_imgProcesser._matchlinelistbuffer_right.back();
+    _sparselinecloud=_imgProcesser._sparselinecloudbuffer.back();
+    _linelist=_imgProcesser._linelistbuffer.back();
+    _linelist_left=_imgProcesser._linelistbuffer_left.back();
+    _linelist_right=_imgProcesser._linelistbuffer_right.back();  
     }
+     
+    for(int i=0;i<_matchlinelist.size();i++)
+    {
+        _matchlinecloud->points.push_back(_matchlinelist[i].p3d);
+    }
+    
+    for(int i=0;i<_matchlinelist_left.size();i++)
+    {
+        _matchlinecloud->points.push_back(_matchlinelist_left[i].p3d);
+    }
+    for(int i=0;i<_matchlinelist_right.size();i++)
+    {
+        _matchlinecloud->points.push_back(_matchlinelist_right[i].p3d);  
+    }
+    
+    _matchlinecloud->width=_matchlinecloud->size();
+    _matchlinecloud->height=1;
+
+
 
     
-
     _kf.update_iterated_dyn_share_modified(0.001, solveTime);
     _stateIkfom=_kf.get_x();
 
@@ -1026,12 +1049,13 @@ void System::processCloudIKFoM()
     //TicToc time4;
 
 
-    //std::cout<<_stateIkfom.offset_R_L_I<<std::endl;
+    //std::cout<<_stateIkfom.pos<<std::endl;
 
     transCloud(_localCloudDownPtr, _globalCloudDownPtr, _Rwl, _twl);
     PointCloudXYZI::Ptr curWorldCloudPtr(new PointCloudXYZI());
     transCloud(_localCloudDownPtr, curWorldCloudPtr, _Rwl, _twl);
-    transCloud3(_matchlinecloud, _matchworldlinecloud, _Rwl, _twl);
+    //transCloud3(_matchlinecloud, _matchworldlinecloud, _Rwl, _twl);
+    _matchworldlinecloudrgb=convertPointCloudWithLines(_matchlinecloud);
     //PointCloudXYZI::Ptr curWorldPropCloudPtr(new PointCloudXYZI());
     _matchlinecloud->clear();
     //transCloud(_localCloudDownPtr, curWorldPropCloudPtr, _Rwlprop, _twlprop);
@@ -1074,8 +1098,8 @@ void System::processCloudIKFoM()
     /////////////dense map update and save /////////////
     if (_config._isSaveMap)
     {
-        PointCloudXYZI::Ptr curWorldCloudPtr(new PointCloudXYZI());
-        transCloud(_localCloudPtr, curWorldCloudPtr, _Rwl, _twl);
+        //PointCloudXYZI::Ptr curWorldCloudPtr(new PointCloudXYZI());
+        //transCloud(_localCloudPtr, curWorldCloudPtr, _Rwl, _twl);
         updateDenseMap(curWorldCloudPtr);
         saveMap();
     }
@@ -1209,7 +1233,7 @@ void System::hShareModelKdTree(state_ikfom &s, esekfom::dyn_share_datastruct<dou
 void System::hShareModelVoxelMap(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_data)
 {
     double totalResidual = 0.0;
-
+    //std::cout<<s.offset_T_L_I<<std::endl;
     _Rwl = s.rot.matrix() * s.offset_R_L_I;//Rwl=Rwi*Ril
     _twl = s.rot.matrix() * s.offset_T_L_I + s.pos;//twl=Twi*til
     //transCloud(_localSurfCloudDownPtr, _globalSurfCloudDownPtr, _Rwl, _twl);//pl->pw
@@ -1247,10 +1271,18 @@ void System::hShareModelVoxelMap(state_ikfom &s, esekfom::dyn_share_datastruct<d
 //		TicToc time1;
     buildResidualListOmp(_voxelSurfMap, _config._voxelLength, 3.0, _config._maxLayers, _curSurfPvList, _matchedSurfList, nonMatchList, isStrict);
 //		printf("buildResidualListOmp time: %f ms\n", time1.toc());
-
+    _Rl2l=_Rwlprop.conjugate()*_Rwl;
+    _tl2l=_Rwlprop.conjugate()*_twl-_Rwlprop.conjugate()*_twlprop;
+    if(_config._isUseIntensity)
+    {
+        transCloud3(_sparselinecloud,_curlinecloud,_Rl2l,_tl2l);
+        _imgProcesser.buildmatchlinelist(_matchlinelist,_curlinecloud,_linelist);
+    }
+    
     
 
     const int matchSurfSize = _matchedSurfList.size();
+    int matchlinesize=  _matchlinelist.size();
     if (matchSurfSize < 1)
     {
         ekfom_data.valid = false;
@@ -1267,14 +1299,23 @@ void System::hShareModelVoxelMap(state_ikfom &s, esekfom::dyn_share_datastruct<d
         // updateViewer();
         // PAUSE;
   //  }
-
-    ekfom_data.h_x = MatrixXd::Zero(matchSurfSize, 12); // 23
-    ekfom_data.h.resize(matchSurfSize);
-    ekfom_data.R = MatrixXd::Zero(matchSurfSize, 1);
-    //VectorXd R_inv(matchSurfSize);
+    if(_config._isUseIntensity)
+    {
+        ekfom_data.h_x = MatrixXd::Zero(matchSurfSize+matchlinesize, 12); // 23
+        ekfom_data.h.resize(matchSurfSize+matchlinesize);
+        ekfom_data.R = MatrixXd::Zero(matchSurfSize+matchlinesize, 1);
+    }
+    if(!_config._isUseIntensity)
+    {
+        ekfom_data.h_x = MatrixXd::Zero(matchSurfSize, 12); // 23
+        ekfom_data.h.resize(matchSurfSize);
+        ekfom_data.R = MatrixXd::Zero(matchSurfSize, 1);
+        matchlinesize=0;
+    }
+    
     static int frameIdForTmpFix = 0;
     frameIdForTmpFix++;
-    for (int i = 0; i < matchSurfSize; i++)
+    for (int i = 0; i < matchSurfSize+matchlinesize; i++)
     {
         /*** get the normal vector of closest surface/corner ***/
         Eigen::Matrix<double, 1, 6> J_nq;
@@ -1282,7 +1323,7 @@ void System::hShareModelVoxelMap(state_ikfom &s, esekfom::dyn_share_datastruct<d
         J_nq.block<1, 3>(0, 3) = -_matchedSurfList[i].normal;
         double dist = _matchedSurfList[i].normal.dot(_matchedSurfList[i].pv.pw) + _matchedSurfList[i].d;
         V3D normVec(_matchedSurfList[i].normal);
-
+        
         if (_config._covType == 0)
             _matchedSurfList[i].R = 0.001;
         else if (_config._covType == 1)
@@ -1291,6 +1332,8 @@ void System::hShareModelVoxelMap(state_ikfom &s, esekfom::dyn_share_datastruct<d
             _matchedSurfList[i].R = (sigma_l + normVec.transpose() * _Rwl *
                                                _matchedSurfList[i].pv.bodyCov *
                                                _Rwl.transpose() * normVec);
+            //_matchedSurfList[i].R=0.001;
+            //std::cout<<_matchedSurfList[i].R<<std::endl;                        
         }
         else if (_config._covType == 2)
         {
@@ -1329,7 +1372,7 @@ void System::hShareModelVoxelMap(state_ikfom &s, esekfom::dyn_share_datastruct<d
 
         //            _matchedSurfList[i].R=0.001;
         //R_inv(i) = 1.0 / _matchedSurfList[i].R;
-        ekfom_data.R(i)= _matchedSurfList[i].R;
+        
         // std::cout<< R_inv(i)<<std::endl;
 
         M3D point_be_crossmat;
@@ -1347,14 +1390,41 @@ void System::hShareModelVoxelMap(state_ikfom &s, esekfom::dyn_share_datastruct<d
         }
         else
             ekfom_data.h_x.block<1, 12>(i, 0) << VEC_FROM_ARRAY(normVec), VEC_FROM_ARRAY(A), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
-
+        
+        if(i>=matchSurfSize)
+        {
+            double a=_matchlinelist[i-matchSurfSize].a;
+            double b=_matchlinelist[i-matchSurfSize].b;
+            double c=_matchlinelist[i-matchSurfSize].c;
+            double fx=400.0;
+            double fy=400.0;
+            Eigen::Vector3d pl2=Eigen::Vector3d(_matchlinelist[i-matchSurfSize].p3d.x,_matchlinelist[i-matchSurfSize].p3d.y,_matchlinelist[i-matchSurfSize].p3d.z);
+            V3D pl=_Rl2l.conjugate()*pl2-_Rl2l.conjugate()*_tl2l;
+            double x=pl2(0);
+            double y=pl2(1);
+            double z=pl2(2);
+            V3D normVec((a*fx*y-b*fy*z)/(x*x),-a*fx/x,b*fy/x);
+            M3D point_crossmat;
+            point_crossmat << SKEW_SYM_MATRX(pl);
+            M3D point_be_crossmat;
+            V3D C(_Rwlprop*normVec);
+            V3D A(point_crossmat*_Rwl.conjugate()*C);
+            ekfom_data.h_x.block<1, 12>(i, 0) << VEC_FROM_ARRAY(C),VEC_FROM_ARRAY(A),0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
+            ekfom_data.R(i)= 0.1;
+            ekfom_data.h(i) = -_matchlinelist[i-matchSurfSize].dist;
+            
+        }
         /*** Measuremnt: distance to the closest surface/corner ***/
-        ekfom_data.h(i) = -dist;
-        totalResidual += fabs(dist);
-    }
-//        double meanResidual = totalResidual / matchSurfSize;
-//        std::cout<<"Matched feat num:" << matchSurfSize << std::endl;
-//        std::cout<<"Mean Residual:" << meanResidual << std::endl;
+        if(i<matchSurfSize)
+        {
+            ekfom_data.R(i)= _matchedSurfList[i].R;
+            ekfom_data.h(i) = -dist;
+        }
+        //totalResidual += fabs(dist);
+    }    
+          //double meanResidual = totalResidual / (matchSurfSize+matchlinesize);
+          //std::cout<<"Matched feat num:" << matchSurfSize<<"+"<<matchlinesize<< std::endl;
+          //std::cout<<"Mean Residual:" << meanResidual << std::endl;
 }
 
 

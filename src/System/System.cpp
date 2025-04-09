@@ -283,7 +283,8 @@ void System::motorMotionCompensationZG()
             Eigen::Matrix3d R;
             Eigen::Vector3d t;
             //_cloudAxisTransfer->CalculatePose(rad2deg(curAngle), R, t);
-            _cloudAxisTransfer->getLid2IMUTrans(curAngle, R, t);
+            //_cloudAxisTransfer->getLid2IMUTrans(curAngle, R, t);
+            _cloudAxisTransfer->getLid2IMUTransRefine(curAngle, R, t);
             Eigen::Vector3d pOri(it_pcl->x, it_pcl->y, it_pcl->z);
             Eigen::Vector3d pTrans = R * pOri + t;
             it_pcl->x = pTrans(0);
@@ -1765,6 +1766,7 @@ bool System::initSystem()
 {
     _imgProcesser.startThread();
     std::cout << "imgprocesser started!" << std::endl;
+
     if (_config._isEnable3DViewer)
     {
         initPCLViewer();

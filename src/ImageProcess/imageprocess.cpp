@@ -19,7 +19,7 @@ bool imgProcesser::startThread()
         return false;
     return true;
 }
-void imgProcesser::inputframedata(pcl::PointCloud<pcl::PointXYZI>::Ptr sparsecloud,cv::Mat denseimg)
+void imgProcesser::inputframedata(pcl::PointCloud<pcl::PointXYZI>::Ptr sparsecloud,cv::Mat curdenseimg,cv::Mat curdenseimg_left,cv::Mat curdenseimg_right)
 {
     pcl::PointCloud<pcl::PointXYZI>::Ptr tempsparsecloud (new pcl::PointCloud<pcl::PointXYZI>);
     tempsparsecloud->width=sparsecloud->width;
@@ -33,69 +33,155 @@ void imgProcesser::inputframedata(pcl::PointCloud<pcl::PointXYZI>::Ptr sparseclo
         tempsparsecloud->points[i].intensity=sparsecloud->points[i].intensity;
     }
     _sparsecloudbuffer.push_back(tempsparsecloud);
-    _denseimgbuffer.push_back(denseimg);
+    _denseimgbuffer.push_back(curdenseimg);
+    _denseimgbuffer_left.push_back(curdenseimg_left);
+    _denseimgbuffer_right.push_back(curdenseimg_right);
 }
 
-void imgProcesser::run()
-{
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cursparsecloud(new pcl::PointCloud<pcl::PointXYZI>);
-    pcl::PointCloud<pcl::PointXYZI>::Ptr sparselinecloud(new pcl::PointCloud<pcl::PointXYZI>);
+void imgProcesser::run() {
+    bool hasdata = false;
+    // 添加总计时变量
+    auto total_start_time = std::chrono::high_resolution_clock::now();
+    int iteration_count = 0;
+    double total_processing_time = 0.0;
     
-    cv::Mat _matchImg;
-    cv::Mat curdenseimg;
-    cv::Mat cannyimg;
-    bool hasdata=false;
-    while(1)
-    {
+    while(1) {
+        // 每次循环的计时
+        auto loop_start_time = std::chrono::high_resolution_clock::now();
         _mutexBuf.lock();
         std::vector<std::vector<int>> linelist;
+        std::vector<std::vector<int>> linelist_left;
+        std::vector<std::vector<int>> linelist_right;
         std::vector<Matchlinelist> _matchlinelist;
-        if(_sparsecloudbuffer.size()>0)
-        {
-            std::cout<<"get img framedata"<<std::endl;
-            cursparsecloud=_sparsecloudbuffer.front();
-            curdenseimg=_denseimgbuffer.front();
-            
+        std::vector<Matchlinelist> _matchlinelist_left;
+        std::vector<Matchlinelist> _matchlinelist_right;
+        
+        if(_sparsecloudbuffer.size() > 0) {
+            std::cout << "get img framedata" << std::endl;
+            cursparsecloud = _sparsecloudbuffer.front();
+            // intensityMapdense = _densecloudbuffer.front();
+            // transCloud3(intensityMapdense, intensityMapdense_left, Rleft, Eigen::Vector3d(0,0,0));
+            // transCloud3(intensityMapdense, intensityMapdense_right, Rright, Eigen::Vector3d(0,0,0));
+            // curdenseimg = projectPinhole(intensityMapdense, false);
+            // curdenseimg_left = projectPinhole(intensityMapdense_left, false);
+            // curdenseimg_right = projectPinhole(intensityMapdense_right, false);
+            curdenseimg = _denseimgbuffer.front();
+            curdenseimg_left = _denseimgbuffer_left.front();
+            curdenseimg_right = _denseimgbuffer_right.front();
             _sparsecloudbuffer.erase(_sparsecloudbuffer.begin());
             _denseimgbuffer.erase(_denseimgbuffer.begin());
-            hasdata=true;
+            _denseimgbuffer_left.erase(_denseimgbuffer_left.begin());
+            _denseimgbuffer_right.erase(_denseimgbuffer_right.begin());
+            //_densecloudbuffer.erase(_densecloudbuffer.begin());
+            hasdata = true;
         }
         _mutexBuf.unlock();
-        if(hasdata)
-        {
+        
+        if(hasdata) {
             _mutexBuf.lock();
             
-            extractIntensityEdgesOptimized(cursparsecloud,sparselinecloud);
+            // 特征提取计时
+            auto feature_start = std::chrono::high_resolution_clock::now();
+            extractIntensityEdgesOptimized(cursparsecloud, sparselinecloud);
+            auto feature_end = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double, std::milli> feature_time = feature_end - feature_start;
             
-            // cv::Mat intensityImgsparse=_imgProcesser.projectPinhole(_sparselinecloud,_scanlineIdMap,false);
-            curdenseimg=fillHolesFast(curdenseimg);
+            // 图像处理计时
+            auto fill_start = std::chrono::high_resolution_clock::now();
+            curdenseimg = fillHolesFast(curdenseimg);
+            curdenseimg_left = fillHolesFast(curdenseimg_left);
+            curdenseimg_right = fillHolesFast(curdenseimg_right);
+
+            
+            // cv::imwrite(std::string(ROOT_DIR)+"image/medium/"+std::to_string(frame)+".png", curdenseimg);
+            // cv::imwrite(std::string(ROOT_DIR)+"image/right/"+std::to_string(frame)+".png",curdenseimg_left);
+            // cv::imwrite(std::string(ROOT_DIR)+"image/left/"+std::to_string(frame)+".png",curdenseimg_right);
+
+            auto fill_end = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double, std::milli> fill_time = fill_end - fill_start;
             
             cv::Mat colorintensityImg;
             cv::cvtColor(curdenseimg, colorintensityImg, cv::COLOR_GRAY2BGR);
-            cannyimg=_lsd.detect(colorintensityImg,linelist);
-            buildmatchlinelist(_matchlinelist,sparselinecloud, linelist);
-            _matchImg=visualimg(colorintensityImg,_matchlinelist);
-            _matchimgbuffer.push_back(_matchImg);
-            _matchlinelistbuffer.push_back(_matchlinelist);
-            //_sparselinecloudbuffer.push_back(sparselinecloud);
-            hasdata=false;
-        
-            // if(_frameId%100==0)
-            // {
-            //     cv::imwrite(string(ROOT_DIR)+"image/canny/"+to_string(_frameId)+".png",_cannyimg);
-            //     cv::imwrite(string(ROOT_DIR)+"image/over/"+to_string(_frameId)+".png",_matchImg);
-            //     cv::imwrite(string(ROOT_DIR)+"image/dense/"+to_string(_frameId)+".png",_intensityImg);
-            // }
-            _mutexBuf.unlock();
-        }
-        if(!hasdata)
-        {
-            continue;
-        }
+            cv::Mat colorintensityImg_left;
+            cv::cvtColor(curdenseimg_left, colorintensityImg_left, cv::COLOR_GRAY2BGR);
+            cv::Mat colorintensityImg_right;
+            cv::cvtColor(curdenseimg_right, colorintensityImg_right, cv::COLOR_GRAY2BGR);
 
+            //colorintensityImg=ultraFastGrayToRGB(curdenseimg);
+            //colorintensityImg_left=ultraFastGrayToRGB(curdenseimg_left);
+            //colorintensityImg_right=ultraFastGrayToRGB(curdenseimg_right);
+
+            // colorintensityImg=enhanceSubtleChangesFast(curdenseimg);
+            // colorintensityImg_left=enhanceSubtleChangesFast(curdenseimg_left);
+            // colorintensityImg_right=enhanceSubtleChangesFast(curdenseimg_right);
+            
+            // 线段检测计时
+            auto line_detect_start = std::chrono::high_resolution_clock::now();
+            cannyimg = _lsd.detect(colorintensityImg, linelist);
+            cannyimg_left = _lsd.detect(colorintensityImg_left, linelist_left);
+            cannyimg_right = _lsd.detect(colorintensityImg_right, linelist_right);
+            auto line_detect_end = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double, std::milli> line_detect_time = line_detect_end - line_detect_start;
+            
+            // 匹配列表建立计时
+            auto match_build_start = std::chrono::high_resolution_clock::now();
+            buildmatchlinelist(_matchlinelist, sparselinecloud, linelist);
+            buildmatchlinelist_left(_matchlinelist_left, sparselinecloud, linelist_left);
+            buildmatchlinelist_right(_matchlinelist_right, sparselinecloud, linelist_right);
+            auto match_build_end = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double, std::milli> match_build_time = match_build_end - match_build_start;
+            
+            // 可视化计时
+            auto vis_start = std::chrono::high_resolution_clock::now();
+            _matchImg = visualimg(colorintensityImg, _matchlinelist);
+            _matchImg_left = visualimg(colorintensityImg_left, _matchlinelist_left);
+            _matchImg_right = visualimg(colorintensityImg_right, _matchlinelist_right);
+            auto vis_end = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double, std::milli> vis_time = vis_end - vis_start;
+            //cv::imwrite(std::string(ROOT_DIR)+"image/match/"+std::to_string(frame)+".png", colorintensityImg);
+            //cv::imwrite(std::string(ROOT_DIR)+"image/match_right/"+std::to_string(frame)+".png",_matchImg_left);
+            //cv::imwrite(std::string(ROOT_DIR)+"image/match_left/"+std::to_string(frame)+".png",_matchImg_right);
+            // 保存数据
+            _matchimgbuffer.push_back(_matchImg);
+            _matchimgbuffer_left.push_back(_matchImg_left);
+            _matchimgbuffer_right.push_back(_matchImg_right);
+            _matchlinelistbuffer.push_back(_matchlinelist);
+            _matchlinelistbuffer_left.push_back(_matchlinelist_left);
+            _matchlinelistbuffer_right.push_back(_matchlinelist_right);
+            _sparselinecloudbuffer.push_back(sparselinecloud);
+            _linelistbuffer.push_back(linelist);
+            _linelistbuffer_left.push_back(linelist_left);
+            _linelistbuffer_right.push_back(linelist_right);
+            
+            hasdata = false;
+            
+            _mutexBuf.unlock();
+            
+            // 打印各阶段计时
+            std::cout << "填充空洞时间: " << fill_time.count() << " ms" << std::endl;
+            std::cout << "线段检测时间: " << line_detect_time.count() << " ms" << std::endl;
+            frame++;
+        }
     }
 }
+void imgProcesser::transCloud3(const pcl::PointCloud<pcl::PointXYZI>::Ptr &cloudIn, 
+    pcl::PointCloud<pcl::PointXYZI>::Ptr &cloudOut,
+    const Eigen::Matrix3d &Rol, 
+    const Eigen::Vector3d &tol) {
+const int cloudSize = cloudIn->size();
+cloudOut->resize(cloudSize);
 
+for (int i = 0; i < cloudSize; i++) {
+const auto &pb = cloudIn->points[i];
+V3D pl(pb.x, pb.y, pb.z);  // pl
+V3D po(Rol * pl + tol);    // po=(Tol*pl)
+
+cloudOut->points[i].x = po[0];
+cloudOut->points[i].y = po[1];
+cloudOut->points[i].z = po[2];
+cloudOut->points[i].intensity = pb.intensity;
+}
+}
 cv::Mat imgProcesser::visualimg(cv::Mat img,std::vector<Matchlinelist>& matchlinelist)
 {
     cv::Mat visualImage = img.clone();
@@ -167,7 +253,9 @@ void imgProcesser::buildmatchlinelist(std::vector<Matchlinelist>& matchlinelist,
     {
         Matchlinelist matchline;
         pcl::PointXYZI p3d=_sparselinecloud->points[i];
+        p3d.intensity=0;
         Eigen::Vector2d p2d=projectTosingle(_sparselinecloud->points[i]);
+        if(p2d[0]<0){continue;}
         for(int j=0;j<segments_list.size();j++)
         {
             Eigen::Vector2d start2d=Eigen::Vector2d(segments_list[j][0],segments_list[j][1]);
@@ -175,13 +263,14 @@ void imgProcesser::buildmatchlinelist(std::vector<Matchlinelist>& matchlinelist,
             double a=segments_list[j][4];
             double b=segments_list[j][5];
             double c=segments_list[j][6];
-            double dist=abs(a*p2d[0]+b*p2d[1]+c)/sqrt(a*a+b*b);
+            double aabb=a*a+b*b;
+            double dist=(a*p2d[0]+b*p2d[1]+c)/sqrt(aabb);
             double pdist=(p2d-start2d).dot(p2d-end2d);
-            if(dist<2&&pdist<0)
+            if(abs(dist)<5&&pdist<0)
             {
-                matchline.a=a;
-                matchline.b=b;
-                matchline.c=c;
+                matchline.a=a/sqrt(aabb);
+                matchline.b=b/sqrt(aabb);
+                matchline.c=c/sqrt(aabb);
                 matchline.p2d.push_back(p2d[0]);
                 matchline.p2d.push_back(p2d[1]);
                 matchline.p3d=p3d;
@@ -190,10 +279,97 @@ void imgProcesser::buildmatchlinelist(std::vector<Matchlinelist>& matchlinelist,
                 matchline.lineend.push_back(segments_list[j][2]);
                 matchline.lineend.push_back(segments_list[j][3]);
                 matchlinelist.push_back(matchline);
+                matchline.dist=dist;
                 break;
             }
         }
     }
+}
+void imgProcesser:: buildmatchlinelist_left(std::vector<Matchlinelist>& matchlinelist, 
+    pcl::PointCloud<pcl::PointXYZI>::Ptr& _sparselinecloud, std::vector<std::vector<int>> segments_list)
+{
+    matchlinelist.clear();
+    pcl::PointCloud<pcl::PointXYZI>::Ptr _sparselinecloud_left(new pcl::PointCloud<pcl::PointXYZI>);
+    transCloud3(_sparselinecloud,_sparselinecloud_left,Rleft,Eigen::Vector3d(0,0,0));
+    for(int i=0;i<_sparselinecloud_left->points.size();i++)
+    {
+        Matchlinelist matchline;
+        pcl::PointXYZI p3d=_sparselinecloud->points[i];
+        p3d.intensity=1;
+        Eigen::Vector2d p2d=projectTosingle(_sparselinecloud_left->points[i]);
+        if(p2d[0]<0){continue;}
+        for(int j=0;j<segments_list.size();j++)
+        {
+            Eigen::Vector2d start2d=Eigen::Vector2d(segments_list[j][0],segments_list[j][1]);
+            Eigen::Vector2d end2d=Eigen::Vector2d(segments_list[j][2],segments_list[j][3]);
+            double a=segments_list[j][4];
+            double b=segments_list[j][5];
+            double c=segments_list[j][6];
+            double aabb=a*a+b*b;
+            double dist=(a*p2d[0]+b*p2d[1]+c)/sqrt(aabb);
+            double pdist=(p2d-start2d).dot(p2d-end2d);
+            if(abs(dist)<5&&pdist<0)
+            {
+                matchline.a=a/sqrt(aabb);
+                matchline.b=b/sqrt(aabb);
+                matchline.c=c/sqrt(aabb);
+                matchline.p2d.push_back(p2d[0]);
+                matchline.p2d.push_back(p2d[1]);
+                matchline.p3d=p3d;
+                matchline.linestart.push_back(segments_list[j][0]);
+                matchline.linestart.push_back(segments_list[j][1]);
+                matchline.lineend.push_back(segments_list[j][2]);
+                matchline.lineend.push_back(segments_list[j][3]);
+                matchlinelist.push_back(matchline);
+                matchline.dist=dist;
+                break;
+            }
+        }
+    }
+    _sparselinecloud_left->clear();
+}
+void imgProcesser::buildmatchlinelist_right(std::vector<Matchlinelist>& matchlinelist, 
+    pcl::PointCloud<pcl::PointXYZI>::Ptr& _sparselinecloud, std::vector<std::vector<int>> segments_list)
+{
+    matchlinelist.clear();
+    pcl::PointCloud<pcl::PointXYZI>::Ptr _sparselinecloud_right(new pcl::PointCloud<pcl::PointXYZI>);
+    transCloud3(_sparselinecloud,_sparselinecloud_right,Rright,Eigen::Vector3d(0,0,0));
+    for(int i=0;i<_sparselinecloud_right->points.size();i++)
+    {
+        Matchlinelist matchline;
+        pcl::PointXYZI p3d=_sparselinecloud->points[i];
+        p3d.intensity=2;
+        Eigen::Vector2d p2d=projectTosingle(_sparselinecloud_right->points[i]);
+        if(p2d[0]<0){continue;}
+        for(int j=0;j<segments_list.size();j++)
+        {
+            Eigen::Vector2d start2d=Eigen::Vector2d(segments_list[j][0],segments_list[j][1]);
+            Eigen::Vector2d end2d=Eigen::Vector2d(segments_list[j][2],segments_list[j][3]);
+            double a=segments_list[j][4];
+            double b=segments_list[j][5];
+            double c=segments_list[j][6];
+            double aabb=a*a+b*b;
+            double dist=(a*p2d[0]+b*p2d[1]+c)/sqrt(aabb);
+            double pdist=(p2d-start2d).dot(p2d-end2d);
+            if(abs(dist)<5&&pdist<0)
+            {
+                matchline.a=a/sqrt(aabb);
+                matchline.b=b/sqrt(aabb);
+                matchline.c=c/sqrt(aabb);
+                matchline.p2d.push_back(p2d[0]);
+                matchline.p2d.push_back(p2d[1]);
+                matchline.p3d=p3d;
+                matchline.linestart.push_back(segments_list[j][0]);
+                matchline.linestart.push_back(segments_list[j][1]);
+                matchline.lineend.push_back(segments_list[j][2]);
+                matchline.lineend.push_back(segments_list[j][3]);
+                matchlinelist.push_back(matchline);
+                matchline.dist=dist;
+                break;
+            }
+        }
+    }
+    _sparselinecloud_right->clear();
 }
 cv::Mat imgProcesser::fillHolesFast(const cv::Mat& input) {
     // 检查输入图像
@@ -225,8 +401,10 @@ cv::Mat imgProcesser::fillHolesFast(const cv::Mat& input) {
     }
     
     // 固定搜索半径
-    const int radius = 2;
+    const int radius = 1;
     
+
+
     // 对每个空洞点进行一次插值
     #pragma omp parallel for // 可选：启用OpenMP并行处理
     for (int idx = 0; idx < holePoints.size(); idx++) {
@@ -234,7 +412,7 @@ cv::Mat imgProcesser::fillHolesFast(const cv::Mat& input) {
         int x = point.x;
         int y = point.y;
         
-        // 收集周围非空洞点的值
+        // 收集周围非空洞点的ss值
         int totalValue = 0;
         int count = 0;
         
@@ -254,7 +432,6 @@ cv::Mat imgProcesser::fillHolesFast(const cv::Mat& input) {
                 }
             }
         }
-        
         // 如果找到有效点，使用平均值填充
         if (count > 0) {
             result.at<uchar>(y, x) = totalValue / count;
@@ -1417,8 +1594,8 @@ Eigen::Vector2d imgProcesser::projectTosingle(pcl::PointXYZI p)
     // 检查像素坐标是否在图像范围内
     if (u >= 0 && u < IMG_WIDTH && v >= 0 && v < IMG_HEIGHT) {
         // 强制转换为整数坐标
-        int ui = static_cast<int>(u);
-        int vi = static_cast<int>(v);
+        //int ui = static_cast<int>(u);
+        //int vi = static_cast<int>(v);
         return Eigen::Vector2d(u,v);
     }
     else
@@ -1429,7 +1606,7 @@ Eigen::Vector2d imgProcesser::projectTosingle(pcl::PointXYZI p)
     
 }
 
-cv::Mat imgProcesser::projectPinhole(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, cv::Mat scanlineIdMap, bool isinter) {
+cv::Mat imgProcesser::projectPinhole(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, bool isinter) {
     // 设置图像尺寸
     const int IMG_HEIGHT = 800;  // 图像高度
     const int IMG_WIDTH = 800;   // 图像宽度
@@ -1491,19 +1668,6 @@ cv::Mat imgProcesser::projectPinhole(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud
         }
     }
     
-    // 如果需要插值处理空洞
-    if(isinter) {
-        // 创建空洞掩码（值为0的地方是空洞）
-        cv::Mat mask = (intensityImage == 0);
-        
-        // 使用形态学闭操作填充小空洞
-        cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
-        cv::morphologyEx(intensityImage, intensityImage, cv::MORPH_CLOSE, kernel);
-        
-        // 对于较大的空洞，使用中值滤波
-        cv::medianBlur(intensityImage, intensityImage, 5);
-    }
-    
     // 归一化到 [0, 255]
     double minVal, maxVal;
     cv::minMaxLoc(intensityImage, &minVal, &maxVal);
@@ -1519,14 +1683,380 @@ cv::Mat imgProcesser::projectPinhole(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud
     cv::equalizeHist(intensityImage, intensityImage);
     
     // 伽马校正增强对比度
-    // cv::Mat gammaImage;
-    // intensityImage.convertTo(gammaImage, CV_32F, 1.0 / 255.0);
-    // cv::pow(gammaImage, 0.5, gammaImage);  // γ = 0.5
-    // gammaImage.convertTo(intensityImage, CV_8U, 255);
+    cv::Mat gammaImage;
+    intensityImage.convertTo(gammaImage, CV_32F, 1.0 / 255.0);
+    cv::pow(gammaImage, 0.5, gammaImage);  // γ = 0.5
+    gammaImage.convertTo(intensityImage, CV_8U, 255);
     
     return intensityImage;
 }
 
+
+std::tuple<cv::Mat, cv::Mat, cv::Mat> imgProcesser::projectPinholeall(
+    pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud,
+    const Eigen::Matrix3d& Rleft,
+    const Eigen::Matrix3d& Rright,
+    bool isinter) {
+    
+    // 设置图像尺寸和相机参数 - 使用constexpr提高编译时优化
+    constexpr int IMG_HEIGHT = 800;
+    constexpr int IMG_WIDTH = 800;
+    constexpr float fx = 400.0f;
+    constexpr float fy = 400.0f;
+    constexpr float cx = IMG_WIDTH / 2.0f;
+    constexpr float cy = IMG_HEIGHT / 2.0f;
+    
+    // 提前获取点云大小以避免多次调用size()函数
+    const size_t cloud_size = cloud->size();
+    
+    // 创建强度图和深度图
+    cv::Mat intensityAccum = cv::Mat::zeros(IMG_HEIGHT, IMG_WIDTH, CV_32F);
+    cv::Mat intensityAccum_left = cv::Mat::zeros(IMG_HEIGHT, IMG_WIDTH, CV_32F);
+    cv::Mat intensityAccum_right = cv::Mat::zeros(IMG_HEIGHT, IMG_WIDTH, CV_32F);
+    
+    cv::Mat depthMap = cv::Mat(IMG_HEIGHT, IMG_WIDTH, CV_32F, cv::Scalar(std::numeric_limits<float>::max()));
+    cv::Mat depthMap_left = cv::Mat(IMG_HEIGHT, IMG_WIDTH, CV_32F, cv::Scalar(std::numeric_limits<float>::max()));
+    cv::Mat depthMap_right = cv::Mat(IMG_HEIGHT, IMG_WIDTH, CV_32F, cv::Scalar(std::numeric_limits<float>::max()));
+    
+    // 如果点云为空，直接返回空图像
+    if(cloud_size == 0) {
+        cv::Mat empty = cv::Mat::zeros(IMG_HEIGHT, IMG_WIDTH, CV_8U);
+        return {empty, empty, empty};
+    }
+    
+    // 预计算旋转矩阵，避免在循环中重复计算
+    const float r00 = Rleft(0,0), r01 = Rleft(0,1), r02 = Rleft(0,2);
+    const float r10 = Rleft(1,0), r11 = Rleft(1,1), r12 = Rleft(1,2);
+    const float r20 = Rleft(2,0), r21 = Rleft(2,1), r22 = Rleft(2,2);
+    
+    const float rr00 = Rright(0,0), rr01 = Rright(0,1), rr02 = Rright(0,2);
+    const float rr10 = Rright(1,0), rr11 = Rright(1,1), rr12 = Rright(1,2);
+    const float rr20 = Rright(2,0), rr21 = Rright(2,1), rr22 = Rright(2,2);
+    
+    // 使用直接访问以提高速度
+    float* depthMapPtr = (float*)depthMap.data;
+    float* depthMapLeftPtr = (float*)depthMap_left.data;
+    float* depthMapRightPtr = (float*)depthMap_right.data;
+    
+    float* intensityPtr = (float*)intensityAccum.data;
+    float* intensityLeftPtr = (float*)intensityAccum_left.data;
+    float* intensityRightPtr = (float*)intensityAccum_right.data;
+    
+    const int stride = IMG_WIDTH; // 每行的元素数
+    
+    // 投影点云到图像平面 - 使用数组索引代替at<>操作以提高速度
+    for (size_t i = 0; i < cloud_size; ++i) {
+        const auto& p = cloud->points[i];
+        const float px = p.x, py = p.y, pz = p.z, intensity = p.intensity;
+        
+        // 原始视角处理
+        {
+            // 计算投影点坐标
+            const float x = -px;  // 相机朝向-x方向
+            
+            // 如果深度为0或负数，跳过
+            if(x <= 0) goto left_view;
+            
+            // 计算像素坐标 - 使用乘法代替除法
+            const float inv_x = 1.0f / x;
+            const float u = (fx * py * inv_x) + cx;
+            const float v = (fy * -pz * inv_x) + cy;
+            
+            // 检查像素坐标是否在图像范围内
+            if (u >= 0 && u < IMG_WIDTH && v >= 0 && v < IMG_HEIGHT) {
+                const int ui = static_cast<int>(u);
+                const int vi = static_cast<int>(v);
+                const int idx = vi * stride + ui;
+                
+                // 处理遮挡（近处的点覆盖远处的点）
+                if (x < depthMapPtr[idx]) {
+                    depthMapPtr[idx] = x;
+                    intensityPtr[idx] = intensity;
+                }
+            }
+        }
+        
+    left_view:
+        // 左视角处理
+        {
+            // 内联矩阵乘法，避免创建Eigen对象
+            const float rotx = r00 * px + r01 * py + r02 * pz;
+            const float roty = r10 * px + r11 * py + r12 * pz;
+            const float rotz = r20 * px + r21 * py + r22 * pz;
+            
+            const float x = -rotx;
+            
+            // 如果深度为0或负数，跳过
+            if(x <= 0) goto right_view;
+            
+            // 计算像素坐标
+            const float inv_x = 1.0f / x;
+            const float u = (fx * roty * inv_x) + cx;
+            const float v = (fy * -rotz * inv_x) + cy;
+            
+            // 检查像素坐标是否在图像范围内
+            if (u >= 0 && u < IMG_WIDTH && v >= 0 && v < IMG_HEIGHT) {
+                const int ui = static_cast<int>(u);
+                const int vi = static_cast<int>(v);
+                const int idx = vi * stride + ui;
+                
+                // 处理遮挡
+                if (x < depthMapLeftPtr[idx]) {
+                    depthMapLeftPtr[idx] = x;
+                    intensityLeftPtr[idx] = intensity;
+                }
+            }
+        }
+        
+    right_view:
+        // 右视角处理
+        {
+            // 内联矩阵乘法
+            const float rotx = rr00 * px + rr01 * py + rr02 * pz;
+            const float roty = rr10 * px + rr11 * py + rr12 * pz;
+            const float rotz = rr20 * px + rr21 * py + rr22 * pz;
+            
+            const float x = -rotx;
+            
+            // 如果深度为0或负数，跳过
+            if(x <= 0) continue;
+            
+            // 计算像素坐标
+            const float inv_x = 1.0f / x;
+            const float u = (fx * roty * inv_x) + cx;
+            const float v = (fy * -rotz * inv_x) + cy;
+            
+            // 检查像素坐标是否在图像范围内
+            if (u >= 0 && u < IMG_WIDTH && v >= 0 && v < IMG_HEIGHT) {
+                const int ui = static_cast<int>(u);
+                const int vi = static_cast<int>(v);
+                const int idx = vi * stride + ui;
+                
+                // 处理遮挡
+                if (x < depthMapRightPtr[idx]) {
+                    depthMapRightPtr[idx] = x;
+                    intensityRightPtr[idx] = intensity;
+                }
+            }
+        }
+    }
+    
+    // 创建最终输出图像
+    cv::Mat intensityImage, intensityImage_left, intensityImage_right;
+    
+    // 处理原始视角图像
+    {
+        // 找到强度范围
+        double minVal, maxVal;
+        cv::minMaxLoc(intensityAccum, &minVal, &maxVal);
+        
+        // 归一化到[0, 255]
+        if(maxVal > minVal) {
+            intensityAccum.convertTo(intensityImage, CV_8U, 255.0 / (maxVal - minVal), -minVal * 255.0 / (maxVal - minVal));
+        } else {
+            intensityImage = cv::Mat::zeros(IMG_HEIGHT, IMG_WIDTH, CV_8U);
+        }
+        //intensityImage =ultraFastGrayToRGB(intensityImage);
+        
+            // 直方图均衡化
+            cv::equalizeHist(intensityImage, intensityImage);
+            
+            // // 优化伽马校正，使用查找表
+            cv::Mat lookUpTable(1, 256, CV_8U);
+            uchar* p = lookUpTable.ptr();
+            for (int i = 0; i < 256; ++i) {
+                p[i] = cv::saturate_cast<uchar>(std::pow(i / 255.0, 0.5) * 255.0);
+            }
+            cv::LUT(intensityImage, lookUpTable, intensityImage);
+    }
+    
+    // 处理左视角图像
+    {
+        double minVal, maxVal;
+        cv::minMaxLoc(intensityAccum_left, &minVal, &maxVal);
+        
+        if(maxVal > minVal) {
+            intensityAccum_left.convertTo(intensityImage_left, CV_8U, 255.0 / (maxVal - minVal), -minVal * 255.0 / (maxVal - minVal));
+        } else {
+            intensityImage_left = cv::Mat::zeros(IMG_HEIGHT, IMG_WIDTH, CV_8U);
+        }
+
+        //intensityImage_left =ultraFastGrayToRGB(intensityImage_left);
+        
+            cv::equalizeHist(intensityImage_left, intensityImage_left);
+            
+            cv::Mat lookUpTable(1, 256, CV_8U);
+            uchar* p = lookUpTable.ptr();
+            for (int i = 0; i < 256; ++i) {
+                p[i] = cv::saturate_cast<uchar>(std::pow(i / 255.0, 0.5) * 255.0);
+            }
+            cv::LUT(intensityImage_left, lookUpTable, intensityImage_left);
+    }
+    
+    // 处理右视角图像
+    {
+        double minVal, maxVal;
+        cv::minMaxLoc(intensityAccum_right, &minVal, &maxVal);
+        
+        if(maxVal > minVal) {
+            intensityAccum_right.convertTo(intensityImage_right, CV_8U, 255.0 / (maxVal - minVal), -minVal * 255.0 / (maxVal - minVal));
+        } else {
+            intensityImage_right = cv::Mat::zeros(IMG_HEIGHT, IMG_WIDTH, CV_8U);
+        }
+        //intensityImage_right =ultraFastGrayToRGB(intensityImage_right);
+        
+            cv::equalizeHist(intensityImage_right, intensityImage_right);
+            
+            cv::Mat lookUpTable(1, 256, CV_8U);
+            uchar* p = lookUpTable.ptr();
+            for (int i = 0; i < 256; ++i) {
+                p[i] = cv::saturate_cast<uchar>(std::pow(i / 255.0, 0.5) * 255.0);
+            }
+            cv::LUT(intensityImage_right, lookUpTable, intensityImage_right);
+    }
+    
+    return {intensityImage, intensityImage_left, intensityImage_right};
+}
+cv::Mat imgProcesser::ultraFastGrayToRGB(const cv::Mat& grayImage) {
+     // 确保输入是灰度图
+     CV_Assert(grayImage.channels() == 1);
+    
+     // 预先计算查找表 - 使用静态以避免重复计算
+     static cv::Mat lookupTable(1, 256, CV_8UC3);
+     static bool tableInitialized = false;
+     
+     if (!tableInitialized) {
+         for (int i = 0; i < 256; i++) {
+             // 改进的JET颜色映射算法，增强对比度
+             float r = 0, g = 0, b = 0;
+             float normalized = i / 255.0f;
+             
+             // 使用正弦函数产生更强烈的色彩变化
+             if (i < 64) {
+                 // 蓝色到青色区域
+                 b = 255;
+                 g = i * 4;
+                 // 增加微小的红色分量，增强对比度
+                 r = i;
+             } else if (i < 128) {
+                 // 青色到绿色区域
+                 b = 255 - (i - 64) * 4;
+                 g = 255;
+                 // 降低蓝色，增强与邻近颜色的对比
+                 b = std::max(0.0f, b - 20.0f);
+             } else if (i < 192) {
+                 // 绿色到黄色区域
+                 g = 255;
+                 r = (i - 128) * 4;
+                 // 增加微小的蓝色分量，增强对比度
+                 b = (i - 128);
+             } else {
+                 // 黄色到红色区域
+                 g = 255 - (i - 192) * 4;
+                 r = 255;
+                 // 降低绿色，增强与邻近颜色的对比
+                 g = std::max(0.0f, g - 20.0f);
+             }
+             
+             // 增加饱和度 - 让颜色更鲜艳
+             float maxChannel = std::max(r, std::max(g, b));
+             if (maxChannel > 0) {
+                 // 计算当前饱和度
+                 float minChannel = std::min(r, std::min(g, b));
+                 float saturation = (maxChannel - minChannel) / maxChannel;
+                 
+                 // 增加饱和度（降低最小通道的值）
+                 float saturationFactor = 1.3f; // 增强饱和度因子
+                 if (saturation < 1.0f && saturation > 0.0f) {
+                     float newSaturation = std::min(1.0f, saturation * saturationFactor);
+                     float saturationRatio = newSaturation / saturation;
+                     
+                     // 重新计算RGB值以增加饱和度
+                     float adjustment = (maxChannel - minChannel) * (saturationRatio - 1.0f);
+                     
+                     if (r < maxChannel) r = std::max(0.0f, r - adjustment);
+                     if (g < maxChannel) g = std::max(0.0f, g - adjustment);
+                     if (b < maxChannel) b = std::max(0.0f, b - adjustment);
+                 }
+             }
+             
+             // 增加对比度 - 拉伸色彩差异
+             float contrastFactor = 1.2f; // 对比度增强因子
+             r = std::min(255.0f, 128.0f + (r - 128.0f) * contrastFactor);
+             g = std::min(255.0f, 128.0f + (g - 128.0f) * contrastFactor);
+             b = std::min(255.0f, 128.0f + (b - 128.0f) * contrastFactor);
+             
+             // 设置BGR顺序的值
+             lookupTable.at<cv::Vec3b>(0, i) = cv::Vec3b(
+                 cv::saturate_cast<uchar>(b),
+                 cv::saturate_cast<uchar>(g),
+                 cv::saturate_cast<uchar>(r));
+         }
+         tableInitialized = true;
+     }
+     
+     // 为输出图像分配内存
+     cv::Mat colorImage(grayImage.size(), CV_8UC3);
+     
+     // 如果内存连续，使用更快的算法
+     if (grayImage.isContinuous() && colorImage.isContinuous()) {
+         const int totalPixels = grayImage.total();
+         const uchar* grayData = grayImage.ptr<uchar>(0);
+         cv::Vec3b* colorData = colorImage.ptr<cv::Vec3b>(0);
+         
+         // 一次性处理所有像素
+         for (int i = 0; i < totalPixels; i++) {
+             colorData[i] = lookupTable.at<cv::Vec3b>(0, grayData[i]);
+         }
+     } else {
+         // 如果不连续，逐行处理
+         for (int y = 0; y < grayImage.rows; y++) {
+             const uchar* grayRow = grayImage.ptr<uchar>(y);
+             cv::Vec3b* colorRow = colorImage.ptr<cv::Vec3b>(y);
+             
+             for (int x = 0; x < grayImage.cols; x++) {
+                 colorRow[x] = lookupTable.at<cv::Vec3b>(0, grayRow[x]);
+             }
+         }
+     }
+     
+     return colorImage;
+}
+
+cv::Mat imgProcesser::enhanceSubtleChangesFast(const cv::Mat& grayImage) {
+    // 确保输入是灰度图
+    CV_Assert(grayImage.channels() == 1);
+    
+    // 步骤1: 局部归一化 - 比CLAHE更快但仍能增强局部对比度
+    cv::Mat enhancedGray;
+    
+    // 应用小半径高斯模糊获取局部平均值
+    cv::Mat localMean;
+    cv::GaussianBlur(grayImage, localMean, cv::Size(7, 7), 0);
+    
+    // 计算本地方差
+    cv::Mat localVariance;
+    cv::GaussianBlur(grayImage.mul(grayImage), localVariance, cv::Size(7, 7), 0);
+    localVariance -= localMean.mul(localMean);
+    
+    // 计算标准差
+    cv::Mat localStdDev;
+    cv::sqrt(cv::max(localVariance, 0), localStdDev);
+    
+    // 归一化图像
+    cv::Mat normalizedLocal = (grayImage - localMean) / (localStdDev + 10.0);
+    
+    // 将归一化的值映射回[0,255]范围
+    normalizedLocal = normalizedLocal * 40.0 + 128.0;
+    normalizedLocal.convertTo(enhancedGray, CV_8U);
+    
+    // 步骤2: 使用伪彩色映射使微小变化可见
+    // 选择Turbo色彩映射，它特别适合显示微小变化
+    cv::Mat colorImage;
+    cv::applyColorMap(enhancedGray, colorImage, cv::COLORMAP_JET);
+    
+    return colorImage;
+}
 cv::Mat imgProcesser::projectToXZ(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud,cv::Mat scanlineIdMap,bool isinter) {
     const int IMG_HEIGHT =800;  // 俯仰角分辨率（Z 方向）
     const int IMG_WIDTH = 800;  // 水平角度分辨率（X 方向）

@@ -108,20 +108,31 @@ public:
             printf("Failed opening param file: %s\n", paramPath.c_str());
             return false;
         }
-        fscanf(fp, "%d %lf %lf %lf %lf %lf",
-               &_deviceType, &_angleLid2IMU, &_dzLid2MotAxis,
-               &_dxLid2IMU, &_dyLid2IMU, &_dzLid2IMU);
+        fscanf(fp, "%lf %lf %lf %lf %lf %lf",
+               & motoraxis(0), &motoraxis(1), &motoraxis(2),
+               &trans(0), &trans(1), &trans(2));
 
-        _angleLid2IMU = deg2rad(_angleLid2IMU);
-        _dzOffset = abs(_dzLid2MotAxis * cos(_angleLid2IMU));
-        _dxOffset = abs(_dzLid2MotAxis * sin(_angleLid2IMU));
+        // _angleLid2IMU = deg2rad(_angleLid2IMU);
+        // _dzOffset = abs(_dzLid2MotAxis * cos(_angleLid2IMU));
+        // _dxOffset = abs(_dzLid2MotAxis * sin(_angleLid2IMU));
 
-        _fixPart = Translation3d(-_dxLid2IMU + _dxOffset, -_dyLid2IMU, -_dzLid2IMU - _dzOffset) *
-                   AngleAxisd(-M_PI / 2, Vector3d::UnitZ()) *
-                   AngleAxisd(-_angleLid2IMU, Vector3d::UnitX());
+        // _fixPart = Translation3d(-_dxLid2IMU + _dxOffset, -_dyLid2IMU, -_dzLid2IMU - _dzOffset) *
+        //            AngleAxisd(-M_PI / 2, Vector3d::UnitZ()) *
+        //            AngleAxisd(-_angleLid2IMU, Vector3d::UnitX());
 
+        _RLI_calib.matrix()<<0,0.939693,0.34202,0.122378,
+                            -1, 0, 0, 0.033,
+                            0, -0.34202, 0.939693, 0.12356,
+                            0,0,0,1;
+        Eigen::Matrix3d rotMatrix;
+        Eigen::Vector3d vectorBefore(0, 1, 0);
+        rotMatrix = Eigen::Quaterniond::FromTwoVectors(vectorBefore, motoraxis).toRotationMatrix();
+        _fixPart_new = Eigen::Affine3d::Identity();
+        _fixPart_new.rotate(rotMatrix.inverse());
+        _fixPart_new.translation() << trans(0, 0), 0, trans(2, 0);
         fclose(fp);
         return true;
+        
     }
 
     //Read error curve parameters
@@ -212,11 +223,22 @@ public:
     void getLid2IMUTrans(const double &motorAngle, Eigen::Matrix3d &Ril, Eigen::Vector3d &til)
     {
         Eigen::Affine3d Til = _fixPart *
-            
             Eigen::AngleAxisd(-motorAngle, Vector3d::UnitY()) *
             Eigen::Translation3d(0, 0, -_dzLid2MotAxis);
         Ril = Til.linear();
         til = Til.translation();
+    }
+
+
+
+    void getLid2IMUTransRefine(const double& motorAngle, Eigen::Matrix3d& Ril, Eigen::Vector3d& til)
+   {
+    Eigen::Affine3d Til = _RLI_calib* _fixPart_new.inverse() *
+        Eigen::AngleAxisd(-motorAngle, Eigen::Vector3d::UnitY()) *
+        _fixPart_new;
+
+    Ril = Til.linear();
+    til = Til.translation();
     }
 private:
     //Rodri's rotation formula
@@ -260,11 +282,15 @@ private:
     double _angleLid2IMU;
     double _dxLid2IMU;
     double _dyLid2IMU;
+    Eigen::Vector3d motoraxis;
+    Eigen::Vector3d trans;
     double _dzLid2IMU;
     double _dzOffset;
     double _dxOffset;
     int _deviceType;
     Eigen::Affine3d _fixPart;
+    Eigen::Affine3d _fixPart_new;
+    Eigen::Affine3d _RLI_calib;
     bool m_is_use_rpyxyz_error_param;  //Whether to use error parameters
     vector<Eigen::VectorXd> m_rpyxyz_error_params;  //error parameters
 };

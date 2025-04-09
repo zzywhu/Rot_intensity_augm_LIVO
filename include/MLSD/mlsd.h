@@ -50,8 +50,8 @@ private:
     int map_h;                           // 特征图高度
     int map_w;                           // 特征图宽度
     std::vector<float> input_image_;     // 预处理后的输入图像数据
-    const float conf_threshold = 0.5;    // 置信度阈值
-    const float dist_threshold = 10.0;   // 距离阈值
+    const float conf_threshold = 0.2;    // 置信度阈值
+    const float dist_threshold = 5;   // 距离阈值
 
     // ONNX Runtime相关变量
     Ort::Env env = Ort::Env(ORT_LOGGING_LEVEL_ERROR, "M-LSD");

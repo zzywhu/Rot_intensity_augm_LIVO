@@ -19,6 +19,7 @@
 #include <pcl/common/io.h>
 #include <pcl/common/common.h>
 #include <pcl/features/normal_3d.h>
+#include <tuple>
 #include <pcl/features/normal_3d_omp.h>
 #include <pcl/features/principal_curvatures.h>
 #include <pcl/filters/extract_indices.h>
@@ -50,20 +51,56 @@ struct Matchlinelist
       std::vector<int> linestart;
       std::vector<int> lineend;
       double a,b,c;
+      double dist;
     };
 class imgProcesser
     {
     public:
     std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> _sparsecloudbuffer;
+    std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> _sparsecloudbuffer_left;
+    std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> _sparsecloudbuffer_right;
+    std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> _densecloudbuffer;
+    std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> _densecloudbuffer_left;
+    std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> _densecloudbuffer_right;
     std::vector<cv::Mat> _denseimgbuffer;
+    std::vector<cv::Mat> _denseimgbuffer_left;
+    std::vector<cv::Mat> _denseimgbuffer_right;
     boost::circular_buffer<std::vector<Matchlinelist>> _matchlinelistbuffer;
+    boost::circular_buffer<std::vector<Matchlinelist>> _matchlinelistbuffer_left;
+    boost::circular_buffer<std::vector<Matchlinelist>> _matchlinelistbuffer_right;
     boost::circular_buffer<pcl::PointCloud<pcl::PointXYZI>::Ptr> _sparselinecloudbuffer;
+    boost::circular_buffer<pcl::PointCloud<pcl::PointXYZI>::Ptr> _sparselinecloudbuffer_left;
+    boost::circular_buffer<pcl::PointCloud<pcl::PointXYZI>::Ptr> _sparselinecloudbuffer_right;
+    boost::circular_buffer<std::vector<std::vector<int>>>_linelistbuffer;
+    boost::circular_buffer<std::vector<std::vector<int>>>_linelistbuffer_left;
+    boost::circular_buffer<std::vector<std::vector<int>>>_linelistbuffer_right;
     boost::circular_buffer<cv::Mat> _matchimgbuffer;
+    boost::circular_buffer<cv::Mat> _matchimgbuffer_left;
+    boost::circular_buffer<cv::Mat> _matchimgbuffer_right;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr intensityMapdense;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr intensityMapdense_left;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr intensityMapdense_right;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cursparsecloud;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr sparselinecloud;
+    cv::Mat _matchImg;
+    cv::Mat _matchImg_left;
+    cv::Mat _matchImg_right;
+    cv::Mat curdenseimg;
+    cv::Mat curdenseimg_left;
+    cv::Mat curdenseimg_right;
+    cv::Mat cannyimg;
+    cv::Mat cannyimg_left;
+    cv::Mat cannyimg_right;
+    int frame;
+    double _sita;
     std::mutex _mutexBuf;
-    
+    Eigen::Matrix3d Rleft;
+    Eigen::Matrix3d Rright;
     M_LSD _lsd;
     
     std::thread* _imgThread;
+    std::thread* _imgThread_left;
+    std::thread* _imgThread_right;
     struct Plane
     {
     pcl::PointCloud<pcl::PointXYZI> cloud;
@@ -71,20 +108,55 @@ class imgProcesser
     Eigen::Vector3d normal;
     int index;
     };
-    imgProcesser():_lsd(std::string(ROOT_DIR)+"weights/model_512x512_large.onnx"),
+    imgProcesser():_lsd(std::string(ROOT_DIR)+"weights/model_320x320_tiny.onnx"),
+    intensityMapdense(new pcl::PointCloud<pcl::PointXYZI>),
+    intensityMapdense_left(new pcl::PointCloud<pcl::PointXYZI>),
+    intensityMapdense_right(new pcl::PointCloud<pcl::PointXYZI>),
+    cursparsecloud(new pcl::PointCloud<pcl::PointXYZI>),
+    sparselinecloud(new pcl::PointCloud<pcl::PointXYZI>),
     _imgThread(nullptr),
+    _imgThread_left(nullptr),
+    _imgThread_right(nullptr),
     _matchlinelistbuffer(1),
+    _matchlinelistbuffer_left(1),
+    _matchlinelistbuffer_right(1),
     _matchimgbuffer(1),
+    _matchimgbuffer_left(1),
+    _matchimgbuffer_right(1),
+    _linelistbuffer(1),
+    _linelistbuffer_left(1),
+    _linelistbuffer_right(1),
     _sparselinecloudbuffer(1)
     {
+        frame=0;
+        _sita=70*M_PI/180,
+        Rleft<<cos(_sita),-sin(_sita),0,sin(_sita),cos(_sita),0,0,0,1;
+        Rright<<cos(-_sita),-sin(-_sita),0,sin(-_sita),cos(-_sita),0,0,0,1;
     }
     bool startThread();
+    bool startThread_left();
+    bool startThread_right();
     void run();
-    void inputframedata(pcl::PointCloud<pcl::PointXYZI>::Ptr sparsecloud,cv::Mat denseimg);
+    void run_left();
+    void run_right();
+    void inputframedata(pcl::PointCloud<pcl::PointXYZI>::Ptr sparsecloud,cv::Mat curdenseimg,cv::Mat curdenseimg_left,cv::Mat curdenseimg_right);
     cv::Mat visualimg(cv::Mat img,std::vector<Matchlinelist>& matchlinelist);
+    void transCloud3(const pcl::PointCloud<pcl::PointXYZI>::Ptr &cloudIn, 
+        pcl::PointCloud<pcl::PointXYZI>::Ptr &cloudOut,
+        const Eigen::Matrix3d &Rol, 
+        const Eigen::Vector3d &tol);
     void buildmatchlinelist(std::vector<Matchlinelist>& matchlinelist, pcl::PointCloud<pcl::PointXYZI>::Ptr& _sparselinecloud, std::vector<std::vector<int>> segments_list);
-    cv::Mat projectPinhole(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, cv::Mat scanlineIdMap, bool isinter);
+    void buildmatchlinelist_left(std::vector<Matchlinelist>& matchlinelist, pcl::PointCloud<pcl::PointXYZI>::Ptr& _sparselinecloud, std::vector<std::vector<int>> segments_list);
+    void buildmatchlinelist_right(std::vector<Matchlinelist>& matchlinelist, pcl::PointCloud<pcl::PointXYZI>::Ptr& _sparselinecloud, std::vector<std::vector<int>> segments_list);
+    cv::Mat projectPinhole(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, bool isinter);
     cv::Mat fillHolesFast(const cv::Mat& input);
+    cv::Mat ultraFastGrayToRGB(const cv::Mat& grayImage);
+    cv::Mat enhanceSubtleChangesFast(const cv::Mat& grayImage);
+    std::tuple<cv::Mat, cv::Mat, cv::Mat> projectPinholeall(
+        pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud,
+        const Eigen::Matrix3d& Rleft,
+        const Eigen::Matrix3d& Rright,
+        bool isinter);
     void cannyEdgeDetection(const cv::Mat& src, cv::Mat& dst);
     void extractIntensityEdgesOptimized(const pcl::PointCloud<pcl::PointXYZI>::Ptr& input_cloud, 
         pcl::PointCloud<pcl::PointXYZI>::Ptr& intensity_edge);

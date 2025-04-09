@@ -77,6 +77,8 @@ std::string _lineTopic="/rigelslam_rot/lidar/mapping/cloudline";
 std::string _imuTopic="/ZG/IMU_data";
 std::string _motorTopic="/ZG/Motor";
 std::string _imgTopic = "/rigelslam_rot/intensity_img";
+std::string _imgTopic_left = "/rigelslam_rot/intensity_img_left";
+std::string _imgTopic_right = "/rigelslam_rot/intensity_img_right";
 std::string _stopTopic="/ZG/StopSLAMNode";
 std::string _endTopic="/ZG/SLAMNodeStoped";
 std::string _errorTopic="/errorCase";
@@ -195,7 +197,70 @@ void publishImage(const ros::Publisher &pubImage)
     // 发布图像
     pubImage.publish(img_msg);
 }
+void publishImage_left(const ros::Publisher &pubImage) 
+{
+    // 确保图像有效
+    if (_sys->_matchImg.empty()) {
+        ROS_ERROR("Input image is empty!");
+        return;
+    }
+    // 根据图像通道数选择编码格式
+    std::string encoding;
+    if (_sys->_matchImg.type() == CV_8UC1) {
+        encoding = "mono8"; // 单通道灰度图
+    } else if (_sys->_matchImg.type() == CV_8UC3) {
+        encoding = "bgr8"; // 三通道彩色图
+    } else {
+        ROS_ERROR("Unsupported image type: %d", _sys->_matchImg.type());
+        return;
+    }
+    // 创建 sensor_msgs::Image 消息
+    sensor_msgs::ImagePtr img_msg = cv_bridge::CvImage(std_msgs::Header(), encoding, _sys->_matchImg_left).toImageMsg();
 
+    // 创建 Image 消息
+    //sensor_msgs::ImagePtr img_msg = cv_bridge::CvImage(std_msgs::Header(), "mono8", _sys->_intensityImg).toImageMsg();
+    
+    // 设置时间戳
+    img_msg->header.stamp = ros::Time().fromSec(_sys->_lidarEndTime);
+    
+    // 设置坐标系 ID
+    img_msg->header.frame_id = "odom";
+
+    // 发布图像
+    pubImage.publish(img_msg);
+}
+void publishImage_right(const ros::Publisher &pubImage) 
+{
+    // 确保图像有效
+    if (_sys->_matchImg_right.empty()) {
+        ROS_ERROR("Input image is empty!");
+        return;
+    }
+    // 根据图像通道数选择编码格式
+    std::string encoding;
+    if (_sys->_matchImg_right.type() == CV_8UC1) {
+        encoding = "mono8"; // 单通道灰度图
+    } else if (_sys->_matchImg_right.type() == CV_8UC3) {
+        encoding = "bgr8"; // 三通道彩色图
+    } else {
+        ROS_ERROR("Unsupported image type: %d", _sys->_matchImg_right.type());
+        return;
+    }
+    // 创建 sensor_msgs::Image 消息
+    sensor_msgs::ImagePtr img_msg = cv_bridge::CvImage(std_msgs::Header(), encoding, _sys->_matchImg_right).toImageMsg();
+
+    // 创建 Image 消息
+    //sensor_msgs::ImagePtr img_msg = cv_bridge::CvImage(std_msgs::Header(), "mono8", _sys->_intensityImg).toImageMsg();
+    
+    // 设置时间戳
+    img_msg->header.stamp = ros::Time().fromSec(_sys->_lidarEndTime);
+    
+    // 设置坐标系 ID
+    img_msg->header.frame_id = "odom";
+
+    // 发布图像
+    pubImage.publish(img_msg);
+}
 
 void publishFrameBody(const ros::Publisher & pubLaserCloudBody)
 {
@@ -228,10 +293,10 @@ void publishFrameGlobal(const ros::Publisher & pubLaserCloudFull)
 void publishMapline(const ros::Publisher & pubLaserCloudFull)
 {
     sensor_msgs::PointCloud2 laserCloudmsg;
-    pcl::toROSMsg(*_sys->_matchworldlinecloud, laserCloudmsg);
-    _addedMapCloud.reset(new PointCloudXYZI());
+    pcl::toROSMsg(*_sys->_matchworldlinecloudrgb, laserCloudmsg);
+    //_addedMapCloud.reset(new PointCloudXYZI());
     laserCloudmsg.header.stamp = ros::Time().fromSec(_sys->_lidarEndTime);
-    laserCloudmsg.header.frame_id = "odom";
+    laserCloudmsg.header.frame_id = "odom_mapping";
     pubLaserCloudFull.publish(laserCloudmsg);
 }
 
@@ -1243,7 +1308,8 @@ void setParams()
     _sys->_config._bAccCov = 0.0001;
     _sys->_config._bGyrCov = 0.0001;
     _sys->_config._timeLagIMUWtrLidar = 0;
-    _sys->_config._isEstiExtrinsic = true;
+    _sys->_config._isEstiExtrinsic = false;
+    _sys->_config._isUseIntensity=false;
     _sys->_config._gnssMaxError = 5;
 
     double tilVec[] = { 0,0,0 };
@@ -1324,7 +1390,11 @@ void loadRosParams(ros::NodeHandle &nh)
 	nh.param<std::string>("rigelslam_rot/equipmentParamsFile", extrinsicFilePath, "/home/w/code/fast_lio_win/src/config/zg_equipment_param.txt");
 	nh.param<std::string>("rigelslam_rot/saveRawPath", _saveRawPath, "/tmp/");
     nh.param<std::string>("rigelslam_rot/scanSceneName",  _scanScene, "");
-   
+    nh.param<bool>("rigelslam_rot/useintensity", _sys->_config._isUseIntensity,false);
+    nh.param<bool>("rigelslam_rot/loopClosureEnableFlag",  _sys->_config._isLoopEn,false);
+    nh.param<bool>("rigelslam_rot/saveMap",  _sys->_config._issavemap,false);
+    LoopCloser::mutableConfig()._issavemap=_sys->_config._issavemap;
+    nh.param<bool>("rigelslam_rot/loopcorrect",   LoopCloser::mutableConfig()._isCorrectRealTime,false);
     _lastTaskPath=_saveDirectory + "/lastTaskInfo.bin";
 
     _sys->_cloudAxisTransfer=new ZGAxisTransfer();
@@ -1501,6 +1571,8 @@ int main(int argc, char **argv)
                                                                          &captureControlMarkerHandler,
                                                                          nullptr, ros::TransportHints().tcpNoDelay());
     ros::Publisher pubImg = _nh.advertise<sensor_msgs::Image>(_imgTopic, 1);
+    ros::Publisher pubImg_left = _nh.advertise<sensor_msgs::Image>(_imgTopic_left, 1);
+    ros::Publisher pubImg_right = _nh.advertise<sensor_msgs::Image>(_imgTopic_right, 1);
     ros::Publisher publine = _nh.advertise<sensor_msgs::PointCloud2>(_lineTopic, 1);
     ros::Publisher pubMap = _nh.advertise<sensor_msgs::PointCloud2>(_mapTopic, 1);
     ros::Publisher pubPath = _nh.advertise<nav_msgs::Path>(_pathTopic, 1);
@@ -1656,6 +1728,8 @@ int main(int argc, char **argv)
             //     cv::imwrite("/home/zzy/SLAM/my_slam_work/src/Rot_intensity_augm_LIVO/image/sparse.png",_sys->_intensityImg);
             // }
             publishImage(pubImg);
+            publishImage_left(pubImg_left);
+            publishImage_right(pubImg_right);
             publishPath(pubPath);
             publishMapline(publine);
             publishOdometry(pubOdomAftMapped);
@@ -1682,7 +1756,13 @@ int main(int argc, char **argv)
     _sys->saveMap(true); //save frames cloud left
 
 
-    _sys->correctLoop(); //loop closing after all loop info detected
+    //savemap
+    if(_sys->_config._issavemap)
+    {_sys->Savemap();}
+     
+    _sys->Savetraj();
+    
+    //_sys->correctLoop(); //loop closing after all loop info detected
 
     if (!_sys->_loopCloser->isFinished())
     {
@@ -1692,14 +1772,12 @@ int main(int argc, char **argv)
             usleep(5000);
     }
 
-    
-
     if(_isContinueTask)
         _sys->processContinualTask(_lastTaskPath);
     _sys->saveLastTaskInfo(_lastTaskPath);
 
-    saveRawData();
-    saveControlPointInfoFile();
+    //saveRawData();
+    //saveControlPointInfoFile();
 
     if(_releaseThread)
     {

@@ -66,6 +66,7 @@ public:
         bool                _isFreeNodeOn;
         bool                _isLoopDetectEn;
         bool                _isCorrectRealTime;
+        bool                _issavemap;
         bool                _isFramewisePGO;
         bool                _isPgoIncremental;
         bool                _isStoreFrameBlock;

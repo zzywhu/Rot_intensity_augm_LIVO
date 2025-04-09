@@ -153,9 +153,11 @@ void LoopCloser::storeFrameData()
 
     _curFrameBlock->_idInStrip=_frameBlocks.size();
     _curFrameBlock->_lastFrameId=_frameBlocks.size();
-    _curFrameBlock->_pcdFilePath=std::string(ROOT_DIR)+"PCD/"+std::to_string(_curFrameBlock->_uniqueId)+".pcd";
-    _pcdWriter.writeBinary(_curFrameBlock->_pcdFilePath, *_curFrameBlock->_pcRaw);
-
+    if(LoopCloser::mutableConfig()._issavemap)
+    {
+        _curFrameBlock->_pcdFilePath=std::string(ROOT_DIR)+"PCD/"+std::to_string(_curFrameBlock->_uniqueId)+".pcd";
+        _pcdWriter.writeBinary(_curFrameBlock->_pcdFilePath, *_curFrameBlock->_pcRaw);
+    }
     //add to gtsam graph
     if(!_frameBlocks.empty())
     {
