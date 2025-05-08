@@ -1194,6 +1194,87 @@ void System::mapping()
     }
 }
 
+void System::mapping_calib()
+{
+    if(_frameId<_config._nSkipFrames)
+        return;
+
+    if (_measures.lidar->empty())
+        return;
+
+    // Motor data exists: transform local pcl into motor zero angle coordinate(let pl be coord in motor zero axis)
+    if (System::config()._isMotorInitialized&&_curMotorAngle >= 0)
+    {
+        //TicToc time;
+        if(_cloudAxisTransfer)// for ZG device
+            motorMotionCompensationZG();
+        else // other devices(extrinsic consist of lidar->motor(0 deg), motor(0 deg)->imu)
+        {
+            transCloudInMotorAxis(_measures.lidar, _measures.lidar, 0, _Rol, _tol);
+            motorMotionCompensation();
+            transCloudInMotorAxis(_measures.lidar, _measures.lidar, _curMotorAngle, Eigen::Matrix3d::Identity(), Eigen::Vector3d::Zero());
+        }
+        //printf("Motor undistort time: %f ms\n", time.toc());
+    }
+//    ostringstream pathOfs;
+//    pathOfs<<std::setprecision(6)<<std::fixed<<string(ROOT_DIR) + "PCD/"<<_lidarBegTime-_sensorTimeDiff<<".txt";
+//    ReadWriter::outputCloudFile(pathOfs.str(),*_measures.lidar);
+
+//    static std::ofstream fCloudOfs =std::ofstream(string(ROOT_DIR) + "PCD/all.txt", std::ios::trunc | std::ios::in);
+//    for(auto& pt: _measures.lidar->points)
+//        fCloudOfs<<std::fixed<<std::setprecision(8)<<","<<pt.x<<","<<pt.y<<","<<pt.z<<","<<rad2deg(_curMotorAngle)<<std::endl;
+
+    *_localCloudPtr = *_measures.lidar;
+    // merge cloud by motor angle
+    if(_frameId<_config._nMergedFrames)//_nMergedFrames=0
+        processCloudOnlyMotor();
+    // calibrate IMU extrinsic
+    else if(!_config._isImuInitialized)
+        processCloudESIKF();
+    // Mapping without imu
+    else if (_measures.imu.empty())
+        //processCloudCeres();
+        //processCloudLSQ(_regVGICP);
+        processCloudVGICP();
+//    // Mapping with imu
+    else if (!_measures.imu.empty())
+    {
+        if(_config._udpateMethod==0)
+            //processCloudIKFoM();
+            processCloudIKFoM_calib();
+            //processCloudESIKF();
+        else
+            processCloudLSQ(_regPCL_VGICP);
+        // processCloudVGICP();
+        //processCloudLOAM();
+    }
+}
+
+
+void System::mapping_undist()
+{
+    if(_frameId<_config._nSkipFrames)
+        return;
+
+    if (_measures.lidar->empty())
+        return;
+
+    // Motor data exists: transform local pcl into motor zero angle coordinate(let pl be coord in motor zero axis)
+    if (System::config()._isMotorInitialized&&_curMotorAngle >= 0)
+    {
+        //TicToc time;
+        if(_cloudAxisTransfer)// for ZG device
+            motorMotionCompensationZG();
+        else // other devices(extrinsic consist of lidar->motor(0 deg), motor(0 deg)->imu)
+        {
+            transCloudInMotorAxis(_measures.lidar, _measures.lidar, 0, _Rol, _tol);
+            motorMotionCompensation();
+            transCloudInMotorAxis(_measures.lidar, _measures.lidar, _curMotorAngle, Eigen::Matrix3d::Identity(), Eigen::Vector3d::Zero());
+        }
+        //printf("Motor undistort time: %f ms\n", time.toc());
+    }
+    *_localCloudPtr = *_measures.lidar;
+}
 //void System::processGNSS()
 //{
 //#ifdef GTSAM_ON

@@ -491,7 +491,10 @@ void System::Savetraj()
                         Eigen::Vector3d pose(frameBlock->_poseLo(0, 3),frameBlock->_poseLo(1, 3),frameBlock->_poseLo(2, 3));
                         pose=_rotAlign_traj*pose;
                         //correct imu poses by relposes
-           fout<<i<<" "<<pose(0)<<" "<<pose(1)<<" "<<pose(2)<<" "<<"0 "<<"0 "<<"0 "<<"1"<<std::endl;
+                        if(i==0)
+                        {fout<<i<<" "<<"0 "<<"0 "<<"0 "<<"0 "<<"0 "<<"0 "<<"1"<<std::endl;}
+                        if(i!=0)
+                        {fout<<i<<" "<<pose(0)<<" "<<pose(1)<<" "<<pose(2)<<" "<<"0 "<<"0 "<<"0 "<<"1"<<std::endl;}
                     }
         }
 }

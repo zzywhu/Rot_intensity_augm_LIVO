@@ -1,4 +1,5 @@
 #include"ImageProcess/imageprocess.h"
+#include <limits>
 pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
 pcl::PointCloud<pcl::Boundary>::Ptr boundaries(new pcl::PointCloud<pcl::Boundary>); //声明一个boundary类指针，作为返回值
 pcl::PointCloud<pcl::PointXYZI>next_cloud;
@@ -1605,6 +1606,47 @@ Eigen::Vector2d imgProcesser::projectTosingle(pcl::PointXYZI p)
 
     
 }
+
+cv::Mat imgProcesser::projectDepth(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud) {
+    // 创建空深度图
+    cv::Mat depth_map = cv::Mat::zeros(800, 800, CV_32F);
+    cv::Mat point_count = cv::Mat::zeros(800, 800, CV_32F);
+    
+    // 将3D点投影到2D图像平面
+    for (const auto& point : cloud->points) {
+        // 跳过摄像机后方的点（z为负）
+        if (point.z <= 0) continue;
+        
+        // 投影点到图像平面
+        int u = static_cast<int>((400 * point.x) / point.z + 400 + 0.5f);
+        int v = static_cast<int>((400 * point.y) / point.z + 400 + 0.5f);
+        
+        // 检查投影点是否在图像范围内
+        if (u >= 0 && u <800 && v >= 0 && v < 800 ) {
+            // 累积相同像素的深度值（用于后续平均）
+            depth_map.at<float>(v, u) += point.z;
+            point_count.at<float>(v, u) += 1.0f;
+        }
+    }
+    
+    // 对有多个点的像素取平均深度值
+    for (int y = 0; y < 800 ; y++) {
+        for (int x = 0; x < 800 ; x++) {
+            if (point_count.at<float>(y, x) > 0) {
+                depth_map.at<float>(y, x) /= point_count.at<float>(y, x);
+            }
+        }
+    }
+    
+    // 创建一个虚拟的主图像（在我们的实现中未使用）
+    cv::Mat dummy_main_image = cv::Mat::zeros(800 , 800 , CV_8UC3);
+    
+    // 应用深度补全算法
+    cv::Mat completed_depth = _depth_processor.create_map(dummy_main_image, depth_map);
+    
+    return completed_depth;
+}
+
 
 cv::Mat imgProcesser::projectPinhole(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, bool isinter) {
     // 设置图像尺寸

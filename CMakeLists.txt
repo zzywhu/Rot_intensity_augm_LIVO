@@ -233,7 +233,7 @@ if(GTSAM_ON)
     set(GTSAM_LIBRARIES gtsam)
 endif()
 
-set(ONNXRUNTIME_DIR  "/home/zzy/Downloads/onnxruntime")
+set(ONNXRUNTIME_DIR  "/usr/local")
 
 include_directories(
         include/DataIO
@@ -414,6 +414,11 @@ if(UNIX)
 add_executable(ZGSlamRosTest Examples/ZGSlamRosTest.cpp)
 target_link_libraries(ZGSlamRosTest SlamCore Misc ${PTHREADS_LIBRARY} ${catkin_LIBRARIES} ${cv_bridge_LIBRARIES} cv_bridge xfeat)
 
+add_executable(UndistTest Examples/undis.cpp)
+target_link_libraries(UndistTest SlamCore Misc ${PTHREADS_LIBRARY} ${catkin_LIBRARIES} ${cv_bridge_LIBRARIES} cv_bridge xfeat)
+
+add_executable(CalibTest Examples/calibtest.cpp)
+target_link_libraries(CalibTest SlamCore Misc ${PTHREADS_LIBRARY} ${catkin_LIBRARIES} ${cv_bridge_LIBRARIES} cv_bridge xfeat)
 #add_executable(RosSlamTest Examples/RosSlamTest.cpp)
 #target_link_libraries(RosSlamTest SlamCore ${PTHREADS_LIBRARY} ${catkin_LIBRARIES})
 endif()

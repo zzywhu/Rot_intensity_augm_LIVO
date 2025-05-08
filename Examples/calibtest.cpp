@@ -173,17 +173,8 @@ void publishImage(const ros::Publisher &pubImage)
         return;
     }
     // 根据图像通道数选择编码格式
-    std::string encoding;
-    if (_sys->_matchImg.type() == CV_8UC1) {
-        encoding = "mono8"; // 单通道灰度图
-    } else if (_sys->_matchImg.type() == CV_8UC3) {
-        encoding = "bgr8"; // 三通道彩色图
-    } else {
-        ROS_ERROR("Unsupported image type: %d", _sys->_matchImg.type());
-        return;
-    }
     // 创建 sensor_msgs::Image 消息
-    sensor_msgs::ImagePtr img_msg = cv_bridge::CvImage(std_msgs::Header(), encoding, _sys->_matchImg).toImageMsg();
+    sensor_msgs::ImagePtr img_msg = cv_bridge::CvImage(std_msgs::Header(), "32FC1", _sys->_matchImg).toImageMsg();
 
     // 创建 Image 消息
     //sensor_msgs::ImagePtr img_msg = cv_bridge::CvImage(std_msgs::Header(), "mono8", _sys->_intensityImg).toImageMsg();
@@ -1725,7 +1716,7 @@ int main(int argc, char **argv)
             if (!_sys->config()._isMotorInitialized)
                 _sys->motorInitialize();
             else
-                _sys->mapping();
+                _sys->mapping_calib();
 
             //for display
             //imagecreatortest();
@@ -1734,10 +1725,6 @@ int main(int argc, char **argv)
             //     cv::imwrite("/home/zzy/SLAM/my_slam_work/src/Rot_intensity_augm_LIVO/image/sparse.png",_sys->_intensityImg);
             // }
             publishImage(pubImg);
-            publishImage_left(pubImg_left);
-            publishImage_right(pubImg_right);
-            publishPath(pubPath);
-            publishMapline(publine);
             publishOdometry(pubOdomAftMapped);
             publishFrameBody(pubLaserCloudFullBody);
             //publishMap(pubMap);

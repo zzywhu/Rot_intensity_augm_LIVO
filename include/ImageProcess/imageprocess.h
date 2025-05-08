@@ -41,6 +41,7 @@
 #include <thread>
 #include "MLSD/mlsd.h"
 #include <boost/circular_buffer.hpp>
+#include <ImageProcess/depthprocesser.h>
 
 
 struct Matchlinelist
@@ -97,7 +98,8 @@ class imgProcesser
     Eigen::Matrix3d Rleft;
     Eigen::Matrix3d Rright;
     M_LSD _lsd;
-    
+
+
     std::thread* _imgThread;
     std::thread* _imgThread_left;
     std::thread* _imgThread_right;
@@ -149,6 +151,7 @@ class imgProcesser
     void buildmatchlinelist_left(std::vector<Matchlinelist>& matchlinelist, pcl::PointCloud<pcl::PointXYZI>::Ptr& _sparselinecloud, std::vector<std::vector<int>> segments_list);
     void buildmatchlinelist_right(std::vector<Matchlinelist>& matchlinelist, pcl::PointCloud<pcl::PointXYZI>::Ptr& _sparselinecloud, std::vector<std::vector<int>> segments_list);
     cv::Mat projectPinhole(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, bool isinter);
+    cv::Mat projectDepth(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud);
     cv::Mat fillHolesFast(const cv::Mat& input);
     cv::Mat ultraFastGrayToRGB(const cv::Mat& grayImage);
     cv::Mat enhanceSubtleChangesFast(const cv::Mat& grayImage);
@@ -280,6 +283,10 @@ class imgProcesser
     private:
         int size_x;
         int size_y;
+        DepthMapProcessor _depth_processor;
+        int img_width;
+        int img_height;
+        float fx, fy, cx, cy; // 相机内参
 
     };
 

@@ -28,6 +28,7 @@
 #include "RigelSLAMRawIOTools.h"
 #include "plog/Log.h"
 #include "rigelslam_rot/motor.h"
+#include <sensor_msgs/point_cloud2_iterator.h>
 
 #define OFFLINE_TEST 0
 #define OUTPUT_LOG 0
@@ -277,6 +278,60 @@ void publishFrameBody(const ros::Publisher & pubLaserCloudBody)
     laserCloudmsg.header.stamp = ros::Time().fromSec(_sys->_lidarEndTime);
     laserCloudmsg.header.frame_id = "odom_mapping";
     pubLaserCloudBody.publish(laserCloudmsg);
+}
+
+void publishFrameBody_undist(const ros::Publisher & pubLaserCloudBody)
+{
+    // if(_sys->_frameId%2!=0)
+    //     return;
+    int size = _sys->_localCloudPtr->points.size();
+    PointCloudXYZI::Ptr laserCloudIMUBody(new PointCloudXYZI(size, 1));
+    for (int i = 0; i < size; i++)
+        RGBpointBodyLidarToIMU(&_sys->_localCloudPtr->points[i], &laserCloudIMUBody->points[i]);
+    
+
+    sensor_msgs::PointCloud2 laserCloudmsg;
+    pcl::toROSMsg(*laserCloudIMUBody, laserCloudmsg);
+    laserCloudmsg.header.stamp = ros::Time().fromSec(_sys->_lidarEndTime);
+    laserCloudmsg.header.frame_id = "body";
+
+    sensor_msgs::PointCloud2 cloud_msg;
+sensor_msgs::PointCloud2Modifier modifier(cloud_msg);
+modifier.setPointCloud2Fields(6,
+    "x", 1, sensor_msgs::PointField::FLOAT32,
+    "y", 1, sensor_msgs::PointField::FLOAT32, 
+    "z", 1, sensor_msgs::PointField::FLOAT32,
+    "intensity", 1, sensor_msgs::PointField::FLOAT32,
+    "ring", 1, sensor_msgs::PointField::UINT16,
+    "time", 1, sensor_msgs::PointField::FLOAT32);
+
+// 设置点云大小
+modifier.resize(size);
+
+// 创建迭代器以访问数据
+sensor_msgs::PointCloud2Iterator<float> iter_x(cloud_msg, "x");
+sensor_msgs::PointCloud2Iterator<float> iter_y(cloud_msg, "y");
+sensor_msgs::PointCloud2Iterator<float> iter_z(cloud_msg, "z");
+sensor_msgs::PointCloud2Iterator<float> iter_intensity(cloud_msg, "intensity");
+sensor_msgs::PointCloud2Iterator<uint16_t> iter_ring(cloud_msg, "ring");
+sensor_msgs::PointCloud2Iterator<float> iter_time(cloud_msg, "time");
+
+// 填充数据
+for (size_t i = 0; i < size; ++i) {
+    *iter_x = _sys->_localCloudPtr->points[i].x;
+    *iter_y = _sys->_localCloudPtr->points[i].y;
+    *iter_z = _sys->_localCloudPtr->points[i].z;
+    *iter_intensity = _sys->_localCloudPtr->points[i].intensity;
+    *iter_ring = _sys->_localCloudPtr->points[i].normal_x; // 设置 ring 值
+    *iter_time = _sys->_localCloudPtr->points[i].curvature/1000;  // 设置 time 值
+    
+    // 移动到下一个点
+    ++iter_x; ++iter_y; ++iter_z; ++iter_intensity; ++iter_ring; ++iter_time;
+}
+cloud_msg.header.stamp = ros::Time().fromSec(_sys->_lidarBegTime);
+cloud_msg.header.frame_id = "body";
+
+    pubLaserCloudBody.publish(cloud_msg);
 }
 
 void publishFrameGlobal(const ros::Publisher & pubLaserCloudFull)
@@ -1380,7 +1435,6 @@ void loadRosParams(ros::NodeHandle &nh)
     nh.param<double>("rigelslam_rot/maxRange",  LidarProcess::mutableConfig()._blindMax, 0);
     nh.param<int>("rigelslam_rot/scanLines",  LidarProcess::mutableConfig()._nScans, 16);
     nh.param<int>("rigelslam_rot/cov_type",  _sys->_config._covType, 1);
-    nh.param<int>("rigelslam_rot/updatemethod",  _sys->_config._udpateMethod, 0);
     nh.param<std::string>("rigelslam_rot/detector_config_path",  LoopCloser::mutableConfig()._detectorConfigPath, "");
     nh.param<bool>("rigelslam_rot/isPlayBackTask", _isPlayBackTask, false);
     nh.param<bool>("rigelslam_rot/GravityAlign", _sys->_config._enableGravityAlign, false);
@@ -1718,14 +1772,14 @@ int main(int argc, char **argv)
 
         if (_sys->syncPackages(_sys->_measures))
         {
-            checkFilterPointNum();
-            checkMatchMethod();
+            //checkFilterPointNum();
+            //checkMatchMethod();
 
             TicToc frameTime;
             if (!_sys->config()._isMotorInitialized)
                 _sys->motorInitialize();
             else
-                _sys->mapping();
+                _sys->mapping_undist();
 
             //for display
             //imagecreatortest();
@@ -1733,18 +1787,18 @@ int main(int argc, char **argv)
             // {
             //     cv::imwrite("/home/zzy/SLAM/my_slam_work/src/Rot_intensity_augm_LIVO/image/sparse.png",_sys->_intensityImg);
             // }
-            publishImage(pubImg);
-            publishImage_left(pubImg_left);
-            publishImage_right(pubImg_right);
-            publishPath(pubPath);
-            publishMapline(publine);
-            publishOdometry(pubOdomAftMapped);
-            publishFrameBody(pubLaserCloudFullBody);
+            //publishImage(pubImg);
+            //publishImage_left(pubImg_left);
+            //publishImage_right(pubImg_right);
+            //publishPath(pubPath);
+            //publishMapline(publine);
+            //publishOdometry(pubOdomAftMapped);
+            publishFrameBody_undist(pubLaserCloudFullBody);
             //publishMap(pubMap);
-            publishMapIncremental(pubMap);
-            publishLoopInfos();
+            //publishMapIncremental(pubMap);
+            //publishLoopInfos();
 
-            addControlPoint();
+            //addControlPoint();
             if(_sys->_frameId%20==0)
                 malloc_trim(0);
             _memUsage=availableMemOri-getAvailableMemory();
@@ -1760,43 +1814,6 @@ int main(int argc, char **argv)
             _sys->_frameId++;
         }
     }
-
-    _sys->saveMap(true); //save frames cloud left
-
-
-    //savemap
-    if(_sys->_config._issavemap)
-    {_sys->Savemap();}
-     
-    _sys->Savetraj();
-    
-    //_sys->correctLoop(); //loop closing after all loop info detected
-
-    if (!_sys->_loopCloser->isFinished())
-    {
-        _sys->_loopCloser->requestFinish();
-        std::cout<<"Loopcloser request finish"<<std::endl;
-        while (!_sys->_loopCloser->isFinished())
-            usleep(5000);
-    }
-
-    if(_isContinueTask)
-        _sys->processContinualTask(_lastTaskPath);
-    _sys->saveLastTaskInfo(_lastTaskPath);
-
-    //saveRawData();
-    //saveControlPointInfoFile();
-
-    if(_releaseThread)
-    {
-        _releaseThread->join();
-        delete _releaseThread;
-    }
-
-    std_msgs::Int32 msg;
-    msg.data = 1;    // 扫描过程中失败，发送1
-    _pubStopedNode.publish(msg);
-    printf("收到结束命令，结束扫描\n");
 
     ros::shutdown();
 

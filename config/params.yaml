@@ -6,7 +6,7 @@ rigelslam_rot:
   isPlayBackTask: false
   playBackFileName: /home/zg/catkin_ws/originbag/2024-11-18-16-46-49.bin
   isContinueTask: false
-  scanSceneName: Indoor
+  scanSceneName: Street
   isOutputIMU: true
   isOutputFeature: false
   minRange: 1
@@ -16,5 +16,9 @@ rigelslam_rot:
   loopcorrect: false
   loopClosureEnableFlag: true
   useintensity: false
-  ridus_k: 3
+  ridus_k: 1.5
+  cov_type: 1
+  updatemethod: 0 #0:Ikfom 1:LSQ with IMU
   saveMap: false
+  GravityAlign: true
+  usemutiview: true

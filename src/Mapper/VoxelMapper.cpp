@@ -1268,11 +1268,11 @@ neighborOffsets(NeighborSearchMethod search_method)
 void buildSingleResidual(const PointWithCov &pv, OctoTree *currentOcto,
                          const int currentLayer, const int maxLayers,
                          const double sigmaNum, bool &isSucess,
-                         double &prob, MatchOctoTreeInfo &singlePtpl, bool isStrict)
+                         double &prob, MatchOctoTreeInfo &singlePtpl, bool isStrict,double radius_k)
 {
-    double radius_k = 1.5; //1 for stair building 3 for normal scene
+    //radius_k = 1; //1 for stair building 3 for normal scene
     Eigen::Vector3d p_w = pv.pw;
-
+    //std::cout<<radius_k<<std::endl;
     if (currentOcto->_planePtr->isPlane)
     {
         PlaneParams &plane = *currentOcto->_planePtr;
@@ -1336,7 +1336,7 @@ void buildSingleResidual(const PointWithCov &pv, OctoTree *currentOcto,
                 {
                     OctoTree *leaf_octo = currentOcto->_leaves[leafnum];
                     buildSingleResidual(pv, leaf_octo, currentLayer + 1, maxLayers,
-                                        sigmaNum, isSucess, prob, singlePtpl, isStrict);
+                                        sigmaNum, isSucess, prob, singlePtpl, isStrict,radius_k);
                 }
             }
             return;
@@ -1360,7 +1360,9 @@ void buildResidualListOmp(const std::unordered_map<VOXEL_LOC, OctoTree *> &voxel
                           std::vector<MatchOctoTreeInfo> &ptpl_list,
                           std::vector<Eigen::Vector3d> &non_match,
                           bool isStrict,
-                          NeighborSearchMethod searchMethod)
+                          double radius_k,
+                          NeighborSearchMethod searchMethod
+                        )
 {
     std::mutex mylock;
     ptpl_list.clear();
@@ -1405,7 +1407,7 @@ void buildResidualListOmp(const std::unordered_map<VOXEL_LOC, OctoTree *> &voxel
             MatchOctoTreeInfo single_ptpl;
             bool is_sucess = false;
             double prob = 0;
-            buildSingleResidual(pv, voxel, 0, max_layers, sigma_num, is_sucess, prob, single_ptpl, isStrict);
+            buildSingleResidual(pv, voxel, 0, max_layers, sigma_num, is_sucess, prob, single_ptpl, isStrict,radius_k);
             if (!is_sucess)
             {
                 VOXEL_LOC near_position = position;
@@ -1423,7 +1425,7 @@ void buildResidualListOmp(const std::unordered_map<VOXEL_LOC, OctoTree *> &voxel
                     near_position.z = near_position.z - 1;
                 auto iter_near = voxel_map.find(near_position);
                 if (iter_near != voxel_map.end())
-                    buildSingleResidual(pv, iter_near->second, 0, max_layers, sigma_num, is_sucess, prob, single_ptpl, isStrict);
+                    buildSingleResidual(pv, iter_near->second, 0, max_layers, sigma_num, is_sucess, prob, single_ptpl, isStrict,radius_k);
             }
             if (is_sucess)
             {
@@ -1472,7 +1474,7 @@ void buildResidualListNormal(const std::unordered_map<VOXEL_LOC, OctoTree *> &vo
             bool is_sucess = false;
             double prob = 0;
             buildSingleResidual(pv, current_octo, 0, max_layers, sigma_num,
-                                is_sucess, prob, single_ptpl);
+                                is_sucess, prob, single_ptpl,3);
 
             if (!is_sucess)
             {
@@ -1492,7 +1494,7 @@ void buildResidualListNormal(const std::unordered_map<VOXEL_LOC, OctoTree *> &vo
 
                 auto iter_near = voxel_map.find(near_position);
                 if (iter_near != voxel_map.end())
-                    buildSingleResidual(pv, iter_near->second, 0, max_layers, sigma_num, is_sucess, prob, single_ptpl);
+                    buildSingleResidual(pv, iter_near->second, 0, max_layers, sigma_num, is_sucess, prob, single_ptpl,3);
             }
             if (is_sucess)
                 ptpl_list.push_back(single_ptpl);

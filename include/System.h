@@ -113,6 +113,7 @@ class SYSTEM_API System
         bool _isFeatExtractEn;
         bool _isEstiExtrinsic;
         bool _isUseIntensity;
+        bool _isUseMultiview;
         int _featureExtractSegNum;
         int _minFramePoint;
         int _nSkipFrames;
@@ -127,6 +128,7 @@ class SYSTEM_API System
         std::vector<double> _rotLICov;
         std::vector<double> _transLICov;
         bool _enableGravityAlign;
+        double _radius_k;
         double _maxInierError;
 
         int _nMaxInterations;
@@ -199,7 +201,7 @@ class SYSTEM_API System
             _dataAccumLength = 300;
             _rotLICov = std::vector<double>(3, 0.00005);
             _transLICov = std::vector<double>(3, 0.0005);
-
+            _radius_k=3;
             _enableGravityAlign = true;
             _maxInierError = 1;
 
@@ -563,12 +565,12 @@ public:
     void filterBrightness(cv::Mat& img);
 
     
-
+    void imagecreator_calib();
     void imagecreatortest();
     void imagecreatoropt();
     void buildsurfmap(pcl::PointCloud<pcl::PointXYZI>::Ptr &densecloud);
     void processCloudIKFoM();
-    
+    void processCloudIKFoM_calib();
 
     void hShareModelKdTree(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_data);
 
@@ -593,7 +595,8 @@ public:
     void processGNSS();
 
     void mapping();
-
+    void mapping_undist();
+    void mapping_calib();
     bool syncPackages(MeasureGroup &meas);
 
     void collectMotorIMU();

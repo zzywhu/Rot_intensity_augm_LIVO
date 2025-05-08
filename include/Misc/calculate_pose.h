@@ -112,14 +112,6 @@ public:
                & motoraxis(0), &motoraxis(1), &motoraxis(2),
                &trans(0), &trans(1), &trans(2));
 
-        // _angleLid2IMU = deg2rad(_angleLid2IMU);
-        // _dzOffset = abs(_dzLid2MotAxis * cos(_angleLid2IMU));
-        // _dxOffset = abs(_dzLid2MotAxis * sin(_angleLid2IMU));
-
-        // _fixPart = Translation3d(-_dxLid2IMU + _dxOffset, -_dyLid2IMU, -_dzLid2IMU - _dzOffset) *
-        //            AngleAxisd(-M_PI / 2, Vector3d::UnitZ()) *
-        //            AngleAxisd(-_angleLid2IMU, Vector3d::UnitX());
-
         _RLI_calib.matrix()<<0,0.939693,0.34202,0.122378,
                             -1, 0, 0, 0.033,
                             0, -0.34202, 0.939693, 0.12356,

@@ -787,7 +787,26 @@ void System::buildsurfmap(pcl::PointCloud<pcl::PointXYZI>::Ptr &densecloud)
     }
 }    
 
+void System::imagecreator_calib()
+{
+    for(int i=0;i<_mapCloudQueue.size();i++)
+    {
+        *_denseCloudMap+=*_mapCloudQueue[i];
+    }
+    
+    pcl::PointCloud<pcl::PointXYZI>::Ptr intensityMapdense(new pcl::PointCloud<pcl::PointXYZI>);
+    
+    Eigen::Matrix3d Rlc;Eigen::Vector3d tlc;
+    Rlc<<-0.0055755, 0.999835, -0.0173053,
+    0.0611648, -0.0169322, -0.997984,
+    -0.998112, -0.00662274, -0.0610603;
+    tlc<<-0.0399568,0.317649,-0.0235294;
+    transCloud2(_denseCloudMap, intensityMapdense,Rlc*_statePropIkfom.rot.matrix().inverse(),
+    -Rlc*_statePropIkfom.rot.matrix().inverse()*_statePropIkfom.pos-tlc);
+    _intensityImg=_imgProcesser.projectDepth(intensityMapdense);
+    _denseCloudMap->clear();
 
+}
 void System::imagecreatortest()
 {
     //_sys->_dispMutex.lock();
@@ -1107,6 +1126,221 @@ void System::processCloudIKFoM()
     //_fTimeOfs<<std::endl;
 }
 
+
+void System::processCloudIKFoM_calib()
+{
+    ////////////////Undistort pcl by imu motions////////////////
+    //TicToc time1;
+    _imuProcessor->Process(_measures, _kf, _localCloudPtr);
+    _stateIkfom = _kf.get_x();//udpate state
+    _statePropIkfom=_stateIkfom;
+    _Rwlprop=_statePropIkfom.rot.matrix()*_statePropIkfom.offset_R_L_I;
+    _twlprop=_statePropIkfom.rot.matrix()*_statePropIkfom.offset_T_L_I+_stateIkfom.pos;
+    // if(_mapCloudQueue.size()>70){
+    //     _mapCloudQueue.push_back(_localCloudPtr);
+    //     imagecreatoropt();
+    // }
+    if(_imuProcessor->imu_need_init())
+        return;
+
+    if (_localCloudPtr->empty() || (_localCloudPtr == nullptr))
+    {
+        _firstLidarTime = _measures.lidar_beg_time;
+        _onlineCalibStartTime = _measures.lidar_beg_time;
+        //std::printf("System is not ready, no points stored.!\n");
+        return;
+    }
+    //_fTimeOfs<<time1.toc()<<" ";
+    //printf("Imu process time: %f ms\n", time1.toc());
+
+    ////////////////Downsample local cloud////////////////
+    //TicToc time2;
+    if (_config._isFeatExtractEn)
+    {
+        _lidarProcessor->extractFeatures(_localCloudPtr, *_localSurfCloudPtr, *_localCornerCloudPtr);
+        _cloudDownSize = _lidarProcessor->downSampleLocalCloud(_localCloudPtr, _localCloudDownPtr);
+        _cloudSurfDownSize = _lidarProcessor->downSampleLocalCloud(_localSurfCloudPtr, _localSurfCloudDownPtr);
+        _cloudCornerDownSize = _lidarProcessor->downSampleLocalCloud(_localCornerCloudPtr, _localCornerCloudDownPtr);
+        //std::cout<<"Corner/Surf input size:"<<_localCornerCloudPtr->size()<<"/"<<_localSurfCloudPtr->size()<<std::endl;
+        std::cout<<"Corner/Surf input down size:"<<_cloudCornerDownSize<<"/"<<_cloudSurfDownSize<<std::endl;
+    }
+    else
+    {
+        if(LidarProcess::config()._nScans==32)
+        {
+            PointCloudXYZI::Ptr filterCloudPtr(new PointCloudXYZI());
+            _lidarProcessor->filterCloud(_localCloudPtr, filterCloudPtr, 3);
+            //std::cout<<filterCloudPtr->size()<<std::endl;
+            _cloudSurfDownSize = _lidarProcessor->downSampleLocalCloud(filterCloudPtr, _localCloudDownPtr);
+        }
+        else if(LidarProcess::config()._nScans==16)
+            _cloudSurfDownSize = _lidarProcessor->downSampleLocalCloud(_localCloudPtr, _localCloudDownPtr);
+        else
+        {
+            std::cerr<<"Wrong scanlines"<<std::endl;
+            return;
+        }
+        _localSurfCloudPtr = _localCloudPtr;
+        _localSurfCloudDownPtr = _localCloudDownPtr;
+        //std::cout<<"Input down size:"<<_cloudSurfDownSize<<std::endl;
+    }
+
+    if (_cloudSurfDownSize < 5 && _cloudCornerDownSize < 5)
+    {
+        std::printf("No point, skip this scan!\n");
+        return;
+    }
+    //_fTimeOfs<<time2.toc()<<" ";
+    //printf("Downsample cloud time: %f ms\n", time2.toc());
+
+    ////////////Initialize voxel map////////////
+    _isEKFInited = !((_measures.lidar_beg_time - _firstLidarTime) < INIT_TIME);
+
+    if (!_isInitMap)
+    {
+        _globalGrav=Eigen::Vector3d(_stateIkfom.grav.get_vect());
+        _rotAlign_traj=Eigen::Quaterniond::FromTwoVectors(_globalGrav,V3D(0,0,-1)).toRotationMatrix();
+        if(_config._enableGravityAlign)
+        {
+            _rotAlign= Eigen::Quaterniond::FromTwoVectors(_globalGrav,V3D(0,0,-1)).toRotationMatrix();//Rw'w
+            //_stateIkfom.rot = _rotAlign * _stateIkfom.rot;//Rw'i=Tw'w*Rwi=Rw'w*Rwi
+            //_stateIkfom.pos = _rotAlign * _stateIkfom.pos;//tw'i=Tw'w*twi=Rw'w*twi+tw'w
+        }
+
+        if(_config._matchMethod==1)
+            initVoxelMap();
+
+        if(_config._matchMethod==0||_config._covType==2||_config._isEnable3DViewer)
+        {
+            _Rwl = _stateIkfom.rot.matrix() * _stateIkfom.offset_R_L_I;                     // Rwl=Rwi*Ril
+            _twl = _stateIkfom.rot.matrix() * _stateIkfom.offset_T_L_I + _stateIkfom.pos; // twl=Twi*til
+            transCloud(_localCloudDownPtr, _globalCloudDownPtr, _Rwl, _twl);
+            initKdTreeMap(_globalCloudDownPtr->points);
+        }
+        
+
+        if(_config._isEnable3DViewer)
+            updateViewer();
+
+        if (_config._isSaveMap)
+        {
+            updateDenseMap(_globalCloudDownPtr);
+            saveMap();
+        }
+        loopClosing(_stateIkfom);
+        _isInitMap = true;
+
+        //printState(_stateIkfom);
+        //PAUSE;
+
+        return;
+    }
+
+    ///////////////match and update state with map//////////////////
+    //TicToc time3;
+    if(_config._matchMethod==0)//Kdtree
+    {
+        laserMapFovSegment();
+        _nearestPoints.resize(_cloudSurfDownSize);
+        _globalSurfCloudDownPtr->resize(_cloudSurfDownSize);
+    }
+    else if(_config._matchMethod==1)//VoxelMap
+    {
+        sort(_localSurfCloudDownPtr->points.begin(), _localSurfCloudDownPtr->points.end(), timeComprator);
+
+        _curSurfPvList.clear();
+        for (size_t i = 0; i < _localSurfCloudDownPtr->size(); i++)
+        {
+            PointWithCov pv;
+            pv.featType = Plane;
+            pv.pl << _localSurfCloudDownPtr->points[i].x, _localSurfCloudDownPtr->points[i].y, _localSurfCloudDownPtr->points[i].z;
+            _curSurfPvList.push_back(pv);
+        }
+        /*** init cov calculation***/
+        if (_config._covType == 2)
+            calcPointNeighCov(_curSurfPvList, 20);
+
+        _voxelCovUpdated.clear();
+    }
+
+    double solveTime=0;
+
+    
+    //update imageprocesser
+    
+
+    _kf.update_iterated_dyn_share_modified(0.001, solveTime);
+    _stateIkfom=_kf.get_x();
+
+    _Rwl=_stateIkfom.rot.matrix()*_stateIkfom.offset_R_L_I;
+    _twl=_stateIkfom.rot.matrix()*_stateIkfom.offset_T_L_I+_stateIkfom.pos;
+    //_fTimeOfs<<time3.toc()<<" ";
+    //printf("Update state time: %f ms\n", time3.toc());
+    //printState(_stateIkfom);
+    ///////Loop closing/////
+    loopClosing(_stateIkfom);
+    //printState(_stateIkfom);
+
+    ///////Update map/////
+    //TicToc time4;
+
+
+    //std::cout<<_stateIkfom.pos<<std::endl;
+
+    transCloud(_localCloudDownPtr, _globalCloudDownPtr, _Rwl, _twl);
+    PointCloudXYZI::Ptr curWorldCloudPtr(new PointCloudXYZI());
+    transCloud(_localCloudDownPtr, curWorldCloudPtr, _Rwl, _twl);
+    //transCloud3(_matchlinecloud, _matchworldlinecloud, _Rwl, _twl);
+    //transCloud(_localCloudDownPtr, curWorldPropCloudPtr, _Rwlprop, _twlprop);
+    
+
+
+    if(_config._matchMethod==0)//KdTree
+        updateKdTreeMap(_globalCloudDownPtr->points);
+    if(_config._matchMethod==1)//Voxelmap
+    {
+        // if(_config._covType==2)
+        //     _ikdtree.Add_Points(_globalCloudDownPtr->points,true);
+        updateVoxelMap();
+    }
+    std::cout << "Voxel count: " << _voxelSurfMap.size() << std::endl;
+    //_fTimeOfs<<time4.toc() << " ";
+    //TicToc time5;
+    if(_config._isEnable3DViewer)
+    {
+        if(_config._matchMethod==1 && _config._covType==1)//Voxelmap && obs cov
+            _addedPoints = _ikdtree.Add_Points(_globalCloudDownPtr->points, true);
+        updateViewer();
+    }
+
+    deleteUnstablePoints();
+
+    
+
+    _mapCloudQueue.push_back(curWorldCloudPtr);
+    if(_mapCloudQueue.size()>150){
+        imagecreator_calib();
+    }
+    _matchImg=_intensityImg;
+    // if(_mapCloudQueue.size()>70){
+    //     _mapCloudQueue[_mapCloudQueue.size()-1]=curWorldCloudPtr;
+    // }
+   
+    //imagecreatortest();
+    //_fTimeOfs << time5.toc();
+    //printf("Update viewer time: %f ms\n", time5.toc());
+    /////////////dense map update and save /////////////
+    if (_config._isSaveMap)
+    {
+        //PointCloudXYZI::Ptr curWorldCloudPtr(new PointCloudXYZI());
+        //transCloud(_localCloudPtr, curWorldCloudPtr, _Rwl, _twl);
+        updateDenseMap(curWorldCloudPtr);
+        saveMap();
+    }
+    //PAUSE;
+    //_fTimeOfs<<std::endl;
+}
+
 void System::hShareModelKdTree(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_data)
 {
 //    _Rwl = s.rot * s.offset_R_L_I;//Rwl=Rwi*Ril
@@ -1269,7 +1503,8 @@ void System::hShareModelVoxelMap(state_ikfom &s, esekfom::dyn_share_datastruct<d
     }
 
 //		TicToc time1;
-    buildResidualListOmp(_voxelSurfMap, _config._voxelLength, 3.0, _config._maxLayers, _curSurfPvList, _matchedSurfList, nonMatchList, isStrict);
+    //std::cout<<_config._radius_k<<std::endl;
+    buildResidualListOmp(_voxelSurfMap, _config._voxelLength, 3.0, _config._maxLayers, _curSurfPvList, _matchedSurfList, nonMatchList,isStrict,_config._radius_k);
 //		printf("buildResidualListOmp time: %f ms\n", time1.toc());
     _Rl2l=_Rwlprop.conjugate()*_Rwl;
     _tl2l=_Rwlprop.conjugate()*_twl-_Rwlprop.conjugate()*_twlprop;
@@ -1278,9 +1513,6 @@ void System::hShareModelVoxelMap(state_ikfom &s, esekfom::dyn_share_datastruct<d
         transCloud3(_sparselinecloud,_curlinecloud,_Rl2l,_tl2l);
         _imgProcesser.buildmatchlinelist(_matchlinelist,_curlinecloud,_linelist);
     }
-    
-    
-
     const int matchSurfSize = _matchedSurfList.size();
     int matchlinesize=  _matchlinelist.size();
     if (matchSurfSize < 1)
@@ -1504,7 +1736,7 @@ bool System::updateKFVoxelMap()
         if (_config._covType == 0||_config._covType == 2 || _isLoopCorrected)
             isStrict = false;
 //		TicToc time1;
-        buildResidualListOmp(_voxelSurfMap, _config._voxelLength, 3.0, _config._maxLayers, _curSurfPvList, _matchedSurfList, nonMatchList, isStrict);
+        buildResidualListOmp(_voxelSurfMap, _config._voxelLength, 3.0, _config._maxLayers, _curSurfPvList, _matchedSurfList, nonMatchList, isStrict,_config._radius_k);
 //		printf("buildResidualListOmp time: %f ms\n", time1.toc());
 
         PointType pb;

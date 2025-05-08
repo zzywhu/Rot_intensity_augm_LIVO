@@ -54,8 +54,11 @@ void LidarProcess::processCutFrameCloud(PPointCloud::Ptr pl_orig, const double& 
         if (i % _config._pointFilterNum == 0 && pl_orig->points[i].ring < _config._nScans)
         {
             double dist2=added_pt.x * added_pt.x + added_pt.y * added_pt.y + added_pt.z * added_pt.z;
+            double cossita=std::abs(added_pt.z)/sqrt(dist2);
             if ( dist2 > (_config._blindMin * _config._blindMin)&&
                  dist2 < (_config._blindMax * _config._blindMax))
+                 //intensity correction
+                added_pt.intensity=added_pt.intensity*dist2;
                 _plFull.points.push_back(added_pt);
         }
     }
