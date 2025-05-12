@@ -233,7 +233,7 @@ if(GTSAM_ON)
     set(GTSAM_LIBRARIES gtsam)
 endif()
 
-set(ONNXRUNTIME_DIR  "/usr/local")
+set(ONNXRUNTIME_DIR  "/home/zzy/Downloads/onnx1.16.3/onnxruntime")
 
 include_directories(
         include/DataIO

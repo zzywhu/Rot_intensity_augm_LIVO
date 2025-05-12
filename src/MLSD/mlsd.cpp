@@ -4,40 +4,81 @@ using namespace std;
 using namespace Ort;
 
 
-
 M_LSD::M_LSD(string model_path)
 {
-	//std::wstring widestr = std::wstring(model_path.begin(), model_path.end());  ////windows写法
-	OrtStatus* status = OrtSessionOptionsAppendExecutionProvider_CUDA(sessionOptions, 0);   ///如果使用cuda加速，需要取消注释
-
-	sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_BASIC);
-	//ort_session = new Session(env, widestr.c_str(), sessionOptions); ////windows写法
-	ort_session = new Session(env, model_path.c_str(), sessionOptions); ////linux写法
-
-	size_t numInputNodes = ort_session->GetInputCount();
-	size_t numOutputNodes = ort_session->GetOutputCount();
-	AllocatorWithDefaultOptions allocator;
-	for (int i = 0; i < numInputNodes; i++)
-	{
-		input_names.push_back(ort_session->GetInputName(i, allocator));
-		Ort::TypeInfo input_type_info = ort_session->GetInputTypeInfo(i);
-		auto input_tensor_info = input_type_info.GetTensorTypeAndShapeInfo();
-		auto input_dims = input_tensor_info.GetShape();
-		input_node_dims.push_back(input_dims);
-	}
-	for (int i = 0; i < numOutputNodes; i++)
-	{
-		output_names.push_back(ort_session->GetOutputName(i, allocator));
-		Ort::TypeInfo output_type_info = ort_session->GetOutputTypeInfo(i);
-		auto output_tensor_info = output_type_info.GetTensorTypeAndShapeInfo();
-		auto output_dims = output_tensor_info.GetShape();
-		output_node_dims.push_back(output_dims);
-	}
-	this->inpHeight = input_node_dims[0][1]; /// n, h, w, c
-	this->inpWidth = input_node_dims[0][2];
-	num_lines = this->output_node_dims[0][1];
-	map_h = this->output_node_dims[2][1];
-	map_w = this->output_node_dims[2][2];
+    // 初始化ONNX Runtime环境
+    env = Ort::Env(ORT_LOGGING_LEVEL_ERROR, "M-LSD");
+    
+    // 设置图优化级别
+    sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_BASIC);
+    
+    // 使用新的CUDA加速方法
+    const OrtApi* api = OrtGetApiBase()->GetApi(ORT_API_VERSION);
+    OrtCUDAProviderOptionsV2* cuda_options = nullptr;
+    api->CreateCUDAProviderOptions(&cuda_options);
+    
+    // 设置CUDA设备ID为0 - 修复参数类型问题
+    const char* key = "device_id";
+    const char* value = "0";
+    OrtStatus* status = api->UpdateCUDAProviderOptions(cuda_options, &key, &value, 1);
+    if (status != nullptr) {
+        const char* error_message = api->GetErrorMessage(status);
+        std::cerr << "Error setting CUDA options: " << error_message << std::endl;
+        api->ReleaseStatus(status);
+    }
+    
+    // 将CUDA Provider添加到会话选项
+    status = api->SessionOptionsAppendExecutionProvider_CUDA_V2(sessionOptions, cuda_options);
+    if (status != nullptr) {
+        const char* error_message = api->GetErrorMessage(status);
+        std::cerr << "Error adding CUDA provider: " << error_message << std::endl;
+        api->ReleaseStatus(status);
+    }
+    
+    // 释放CUDA选项
+    api->ReleaseCUDAProviderOptions(cuda_options);
+    
+    // 创建会话
+    ort_session = new Session(env, model_path.c_str(), sessionOptions);
+    
+    // 获取输入和输出节点信息
+    size_t numInputNodes = ort_session->GetInputCount();
+    size_t numOutputNodes = ort_session->GetOutputCount();
+    AllocatorWithDefaultOptions allocator;
+    
+    // 修复循环变量类型和GetInputName方法
+    for (size_t i = 0; i < numInputNodes; i++)
+    {
+        // 使用GetInputNameAllocated代替GetInputName，返回类型是AllocatedStringPtr
+        Ort::AllocatedStringPtr input_name_ptr = ort_session->GetInputNameAllocated(i, allocator);
+        // 使用input_name_ptr.get()获取底层char*指针，并拷贝字符串内容
+        input_names.push_back(strdup(input_name_ptr.get()));
+        
+        Ort::TypeInfo input_type_info = ort_session->GetInputTypeInfo(i);
+        auto input_tensor_info = input_type_info.GetTensorTypeAndShapeInfo();
+        auto input_dims = input_tensor_info.GetShape();
+        input_node_dims.push_back(input_dims);
+    }
+    
+    // 修复循环变量类型和GetOutputName方法
+    for (size_t i = 0; i < numOutputNodes; i++)
+    {
+        // 使用GetOutputNameAllocated代替GetOutputName，返回类型是AllocatedStringPtr
+        Ort::AllocatedStringPtr output_name_ptr = ort_session->GetOutputNameAllocated(i, allocator);
+        // 使用output_name_ptr.get()获取底层char*指针，并拷贝字符串内容
+        output_names.push_back(strdup(output_name_ptr.get()));
+        
+        Ort::TypeInfo output_type_info = ort_session->GetOutputTypeInfo(i);
+        auto output_tensor_info = output_type_info.GetTensorTypeAndShapeInfo();
+        auto output_dims = output_tensor_info.GetShape();
+        output_node_dims.push_back(output_dims);
+    }
+    
+    this->inpHeight = input_node_dims[0][1]; /// n, h, w, c
+    this->inpWidth = input_node_dims[0][2];
+    num_lines = this->output_node_dims[0][1];
+    map_h = this->output_node_dims[2][1];
+    map_w = this->output_node_dims[2][2];
 }
 
 void M_LSD::preprocess(Mat srcimg)
