@@ -802,7 +802,7 @@ void System::imagecreator_calib()
     -0.998112, -0.00662274, -0.0610603;
     tlc<<-0.0399568,0.317649,-0.0235294;
     transCloud2(_denseCloudMap, intensityMapdense,Rlc*_statePropIkfom.rot.matrix().inverse(),
-    -Rlc*_statePropIkfom.rot.matrix().inverse()*_statePropIkfom.pos-tlc);
+    -Rlc*_statePropIkfom.rot.matrix().inverse()*_statePropIkfom.pos+tlc);
     _intensityImg=_imgProcesser.projectDepth(intensityMapdense);
     _denseCloudMap->clear();
 
@@ -1031,6 +1031,7 @@ void System::processCloudIKFoM()
     _linelist_left=_imgProcesser._linelistbuffer_left.back();
     _linelist_right=_imgProcesser._linelistbuffer_right.back();  
     }
+    _matchlinecloud->clear();
      
     for(int i=0;i<_matchlinelist.size();i++)
     {
@@ -1046,6 +1047,7 @@ void System::processCloudIKFoM()
         _matchlinecloud->points.push_back(_matchlinelist_right[i].p3d);  
     }
     
+    
     _matchlinecloud->width=_matchlinecloud->size();
     _matchlinecloud->height=1;
 
@@ -1057,12 +1059,25 @@ void System::processCloudIKFoM()
 
     _Rwl=_stateIkfom.rot.matrix()*_stateIkfom.offset_R_L_I;
     _twl=_stateIkfom.rot.matrix()*_stateIkfom.offset_T_L_I+_stateIkfom.pos;
-    //_fTimeOfs<<time3.toc()<<" ";
-    //printf("Update state time: %f ms\n", time3.toc());
-    //printState(_stateIkfom);
-    ///////Loop closing/////
+
+
+
     loopClosing(_stateIkfom);
     //printState(_stateIkfom);
+    Eigen::Vector3d alignedPos = _twl;
+    if (_config._enableGravityAlign) {
+        alignedPos = _rotAlign_traj * _twl;
+    }
+        // Convert rotation matrix to quaternion
+        Eigen::Quaterniond quat(_Rwl);
+        quat.normalize();
+        
+        // Write to file with timestamp, position (x, y, z), and orientation (qx, qy, qz, qw)
+        fout_traj<< std::fixed << std::setprecision(5)
+                << _measures.lidar_end_time << " "
+                << alignedPos(0) << " " << alignedPos(1) << " " << alignedPos(2) << " "
+                << quat.x() << " " << quat.y() << " " << quat.z() << " " << quat.w() << std::endl;
+
 
     ///////Update map/////
     //TicToc time4;
@@ -1073,10 +1088,10 @@ void System::processCloudIKFoM()
     transCloud(_localCloudDownPtr, _globalCloudDownPtr, _Rwl, _twl);
     PointCloudXYZI::Ptr curWorldCloudPtr(new PointCloudXYZI());
     transCloud(_localCloudDownPtr, curWorldCloudPtr, _Rwl, _twl);
-    //transCloud3(_matchlinecloud, _matchworldlinecloud, _Rwl, _twl);
     _matchworldlinecloudrgb=convertPointCloudWithLines(_matchlinecloud);
-    //PointCloudXYZI::Ptr curWorldPropCloudPtr(new PointCloudXYZI());
     _matchlinecloud->clear();
+
+
     //transCloud(_localCloudDownPtr, curWorldPropCloudPtr, _Rwlprop, _twlprop);
     
 

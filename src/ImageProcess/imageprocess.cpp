@@ -1,5 +1,6 @@
 #include"ImageProcess/imageprocess.h"
 #include <limits>
+#include"ImageProcess/depth_completion.hpp"
 pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
 pcl::PointCloud<pcl::Boundary>::Ptr boundaries(new pcl::PointCloud<pcl::Boundary>); //声明一个boundary类指针，作为返回值
 pcl::PointCloud<pcl::PointXYZI>next_cloud;
@@ -57,6 +58,7 @@ void imgProcesser::run() {
         std::vector<Matchlinelist> _matchlinelist_left;
         std::vector<Matchlinelist> _matchlinelist_right;
         
+        
         if(_sparsecloudbuffer.size() > 0) {
             std::cout << "get img framedata" << std::endl;
             cursparsecloud = _sparsecloudbuffer.front();
@@ -92,7 +94,7 @@ void imgProcesser::run() {
             curdenseimg = fillHolesFast(curdenseimg);
             curdenseimg_left = fillHolesFast(curdenseimg_left);
             curdenseimg_right = fillHolesFast(curdenseimg_right);
-
+            //cv::imwrite("/home/zzy/SLAM/mri-mms/src/Rot_intensity_augm_LIVO/image/final.png", curdenseimg);
             
             // cv::imwrite(std::string(ROOT_DIR)+"image/medium/"+std::to_string(frame)+".png", curdenseimg);
             // cv::imwrite(std::string(ROOT_DIR)+"image/right/"+std::to_string(frame)+".png",curdenseimg_left);
@@ -142,6 +144,9 @@ void imgProcesser::run() {
             //cv::imwrite(std::string(ROOT_DIR)+"image/match/"+std::to_string(frame)+".png", colorintensityImg);
             //cv::imwrite(std::string(ROOT_DIR)+"image/match_right/"+std::to_string(frame)+".png",_matchImg_left);
             //cv::imwrite(std::string(ROOT_DIR)+"image/match_left/"+std::to_string(frame)+".png",_matchImg_right);
+            // cv::imwrite(std::string(ROOT_DIR)+"image/medium/"+std::to_string(frame)+".png", _matchImg);
+            // cv::imwrite(std::string(ROOT_DIR)+"image/right/"+std::to_string(frame)+".png",_matchImg_left);
+            // cv::imwrite(std::string(ROOT_DIR)+"image/left/"+std::to_string(frame)+".png",_matchImg_right);
             // 保存数据
             _matchimgbuffer.push_back(_matchImg);
             _matchimgbuffer_left.push_back(_matchImg_left);
@@ -254,7 +259,7 @@ void imgProcesser::buildmatchlinelist(std::vector<Matchlinelist>& matchlinelist,
     {
         Matchlinelist matchline;
         pcl::PointXYZI p3d=_sparselinecloud->points[i];
-        p3d.intensity=0;
+        p3d.intensity=_sparselinecloud->points[i].intensity;
         Eigen::Vector2d p2d=projectTosingle(_sparselinecloud->points[i]);
         if(p2d[0]<0){continue;}
         for(int j=0;j<segments_list.size();j++)
@@ -402,7 +407,7 @@ cv::Mat imgProcesser::fillHolesFast(const cv::Mat& input) {
     }
     
     // 固定搜索半径
-    const int radius = 1;
+    const int radius = 2;
     
 
 
@@ -1607,6 +1612,7 @@ Eigen::Vector2d imgProcesser::projectTosingle(pcl::PointXYZI p)
     
 }
 
+
 cv::Mat imgProcesser::projectDepth(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud) {
     // 创建空深度图
     cv::Mat depth_map = cv::Mat::zeros(800, 800, CV_32F);
@@ -1615,7 +1621,7 @@ cv::Mat imgProcesser::projectDepth(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud) 
     // 将3D点投影到2D图像平面
     for (const auto& point : cloud->points) {
         // 跳过摄像机后方的点（z为负）
-        if (point.z <= 0) continue;
+        if (point.z <= 0||point.z>80) continue;
         
         // 投影点到图像平面
         int u = static_cast<int>((400 * point.x) / point.z + 400 + 0.5f);
@@ -1624,26 +1630,24 @@ cv::Mat imgProcesser::projectDepth(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud) 
         // 检查投影点是否在图像范围内
         if (u >= 0 && u <800 && v >= 0 && v < 800 ) {
             // 累积相同像素的深度值（用于后续平均）
-            depth_map.at<float>(v, u) += point.z;
-            point_count.at<float>(v, u) += 1.0f;
+            depth_map.at<float>(v, u) = point.z;
+            //point_count.at<float>(v, u) += 1.0f;
         }
     }
     
-    // 对有多个点的像素取平均深度值
-    for (int y = 0; y < 800 ; y++) {
-        for (int x = 0; x < 800 ; x++) {
-            if (point_count.at<float>(y, x) > 0) {
-                depth_map.at<float>(y, x) /= point_count.at<float>(y, x);
-            }
-        }
-    }
+    // // 对有多个点的像素取平均深度值
+    // for (int y = 0; y < 800 ; y++) {
+    //     for (int x = 0; x < 800 ; x++) {
+    //         if (point_count.at<float>(y, x) > 0) {
+    //             depth_map.at<float>(y, x) /= point_count.at<float>(y, x);
+    //         }
+    //     }
+    // }
     
-    // 创建一个虚拟的主图像（在我们的实现中未使用）
-    cv::Mat dummy_main_image = cv::Mat::zeros(800 , 800 , CV_8UC3);
     
     // 应用深度补全算法
-    cv::Mat completed_depth = _depth_processor.create_map(dummy_main_image, depth_map);
-    
+    cv::Mat completed_depth = depth_completion(depth_map, 800, 800);
+
     return completed_depth;
 }
 
@@ -1899,7 +1903,7 @@ std::tuple<cv::Mat, cv::Mat, cv::Mat> imgProcesser::projectPinholeall(
             intensityImage = cv::Mat::zeros(IMG_HEIGHT, IMG_WIDTH, CV_8U);
         }
         //intensityImage =ultraFastGrayToRGB(intensityImage);
-        
+        cv::imwrite("/home/zzy/SLAM/mri-mms/src/Rot_intensity_augm_LIVO/image/original.png", intensityImage);
             // 直方图均衡化
             cv::equalizeHist(intensityImage, intensityImage);
             
@@ -1910,6 +1914,7 @@ std::tuple<cv::Mat, cv::Mat, cv::Mat> imgProcesser::projectPinholeall(
                 p[i] = cv::saturate_cast<uchar>(std::pow(i / 255.0, 0.5) * 255.0);
             }
             cv::LUT(intensityImage, lookUpTable, intensityImage);
+        cv::imwrite("/home/zzy/SLAM/mri-mms/src/Rot_intensity_augm_LIVO/image/gamma.png", intensityImage);
     }
     
     // 处理左视角图像

@@ -1,15 +1,15 @@
 rigelslam_rot:
-  detector_config_path: /home/zzy/SLAM/my_slam_work/src/Rot_intensity_augm_LIVO/config/LoopConfig.yaml
+  detector_config_path: /home/zzy/SLAM/mri-mms/src/Rot_intensity_augm_LIVO/config/LoopConfig.yaml
   saveDirectory: /home/zg/catkin_ws/tmp/
   saveRawPath: /home/zg/catkin_ws/renderbag/2024-11-18-16-46-49.raw
-  equipmentParamsFile: /home/zzy/SLAM/my_slam_work/src/Rot_intensity_augm_LIVO/config/equipment_param.txt
+  equipmentParamsFile: /home/zzy/SLAM/mri-mms/src/Rot_intensity_augm_LIVO/config/equipment_param.txt
   isPlayBackTask: false
   playBackFileName: /home/zg/catkin_ws/originbag/2024-11-18-16-46-49.bin
   isContinueTask: false
   scanSceneName: Street
   isOutputIMU: true
   isOutputFeature: false
-  minRange: 1
+  minRange: 1.5
   maxRange: 80
   scanLines: 16
   historyKeyframeSearchRadius: 10
@@ -19,6 +19,6 @@ rigelslam_rot:
   ridus_k: 1.5
   cov_type: 1
   updatemethod: 0 #0:Ikfom 1:LSQ with IMU
-  saveMap: false
-  GravityAlign: true
+  saveMap: true
+  GravityAlign: false
   usemutiview: true

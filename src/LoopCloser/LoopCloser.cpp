@@ -155,6 +155,7 @@ void LoopCloser::storeFrameData()
     _curFrameBlock->_lastFrameId=_frameBlocks.size();
     if(LoopCloser::mutableConfig()._issavemap)
     {
+        //std::cout<<std::string(ROOT_DIR)+"PCD/"+std::to_string(_curFrameBlock->_uniqueId)+".pcd"<<std::endl;
         _curFrameBlock->_pcdFilePath=std::string(ROOT_DIR)+"PCD/"+std::to_string(_curFrameBlock->_uniqueId)+".pcd";
         _pcdWriter.writeBinary(_curFrameBlock->_pcdFilePath, *_curFrameBlock->_pcRaw);
     }

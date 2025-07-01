@@ -1736,6 +1736,13 @@ int main(int argc, char **argv)
             publishImage(pubImg);
             publishImage_left(pubImg_left);
             publishImage_right(pubImg_right);
+            // if(_sys->_frameId>50)
+            // {
+            //      cv::imwrite("/home/zzy/SLAM/mri-mms/src/Rot_intensity_augm_LIVO/image/left/"+std::to_string(_sys->_frameId)+".png",_sys->_matchImg_left);
+            //      cv::imwrite("/home/zzy/SLAM/mri-mms/src/Rot_intensity_augm_LIVO/image/right/"+std::to_string(_sys->_frameId)+".png",_sys->_matchImg_right);
+            //      cv::imwrite("/home/zzy/SLAM/mri-mms/src/Rot_intensity_augm_LIVO/image/medium/"+std::to_string(_sys->_frameId)+".png",_sys->_matchImg);
+            // }
+           
             publishPath(pubPath);
             publishMapline(publine);
             publishOdometry(pubOdomAftMapped);
@@ -1768,7 +1775,7 @@ int main(int argc, char **argv)
     if(_sys->_config._issavemap)
     {_sys->Savemap();}
      
-    _sys->Savetraj();
+    //_sys->Savetraj();
     
     //_sys->correctLoop(); //loop closing after all loop info detected
 

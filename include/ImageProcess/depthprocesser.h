@@ -130,7 +130,7 @@ public:
         cv::Mat depths_in = depth_map.clone();
         depths_in.convertTo(depths_in, CV_32F);
         
-        // 根据深度区间计算掩码
+        // 根据深度区间计算掩码 - 保留原始深度值的区间划分
         cv::Mat valid_pixels_near, valid_pixels_med, valid_pixels_far;
         cv::inRange(depths_in, 0.1f, 15.0f, valid_pixels_near);
         cv::inRange(depths_in, 15.0f, 30.0f, valid_pixels_med);
@@ -141,25 +141,26 @@ public:
         valid_pixels_med.convertTo(valid_pixels_med, CV_32F, 1.0/255.0);
         valid_pixels_far.convertTo(valid_pixels_far, CV_32F, 1.0/255.0);
 
-        // 步骤1：深度反转
-        cv::Mat s1_inverted_depths = depths_in.clone();
+        // 移除步骤1中的深度反转，直接使用原始深度
+        cv::Mat s1_depths = depths_in.clone();
         cv::Mat valid_pixels;
         cv::threshold(depths_in, valid_pixels, 0.1f, 255, cv::THRESH_BINARY);
         valid_pixels.convertTo(valid_pixels, CV_32F, 1.0/255.0);
         
-        for (int y = 0; y < s1_inverted_depths.rows; y++) {
-            for (int x = 0; x < s1_inverted_depths.cols; x++) {
-                if (valid_pixels.at<float>(y, x) > 0.5f) {
-                    s1_inverted_depths.at<float>(y, x) = max_depth - s1_inverted_depths.at<float>(y, x);
-                }
-            }
-        }
+        // 不再需要深度反转循环
+        // for (int y = 0; y < s1_inverted_depths.rows; y++) {
+        //     for (int x = 0; x < s1_inverted_depths.cols; x++) { 
+        //         if (valid_pixels.at<float>(y, x) > 0.5f) {
+        //             s1_inverted_depths.at<float>(y, x) = max_depth - s1_inverted_depths.at<float>(y, x);
+        //         }
+        //     }
+        // }
 
         // 步骤2：根据不同深度范围应用不同的形态学扩张
         cv::Mat dilated_far, dilated_med, dilated_near;
-        cv::Mat far_depths = s1_inverted_depths.mul(valid_pixels_far);
-        cv::Mat med_depths = s1_inverted_depths.mul(valid_pixels_med);
-        cv::Mat near_depths = s1_inverted_depths.mul(valid_pixels_near);
+        cv::Mat far_depths = s1_depths.mul(valid_pixels_far);
+        cv::Mat med_depths = s1_depths.mul(valid_pixels_med);
+        cv::Mat near_depths = s1_depths.mul(valid_pixels_near);
         
         cv::dilate(far_depths, dilated_far, kernels.cross_kernel_3());
         cv::dilate(med_depths, dilated_med, kernels.diamond_kernel_5());
@@ -171,7 +172,7 @@ public:
         cv::threshold(dilated_far, valid_pixels_far, 0.1f, 1.0f, cv::THRESH_BINARY);
 
         // 合并不同深度区间的扩张结果
-        cv::Mat s2_dilated_depths = s1_inverted_depths.clone();
+        cv::Mat s2_dilated_depths = s1_depths.clone();
         for (int y = 0; y < s2_dilated_depths.rows; y++) {
             for (int x = 0; x < s2_dilated_depths.cols; x++) {
                 if (valid_pixels_far.at<float>(y, x) > 0.5f) {
@@ -306,15 +307,16 @@ public:
         cv::Mat s8_inverted_depths = s7_blurred_depths.clone();
         cv::threshold(s8_inverted_depths, valid_pixels_float, 0.1f, 1.0f, cv::THRESH_BINARY);
         
-        for (int y = 0; y < s8_inverted_depths.rows; y++) {
-            for (int x = 0; x < s8_inverted_depths.cols; x++) {
-                if (valid_pixels_float.at<float>(y, x) > 0.5f) {
-                    s8_inverted_depths.at<float>(y, x) = max_depth - s8_inverted_depths.at<float>(y, x);
-                }
-            }
-        }
+        // for (int y = 0; y < s8_inverted_depths.rows; y++) {
+        //     for (int x = 0; x < s8_inverted_depths.cols; x++) {
+        //         if (valid_pixels_float.at<float>(y, x) > 0.5f) {
+        //             s8_inverted_depths.at<float>(y, x) = max_depth - s8_inverted_depths.at<float>(y, x);
+        //         }
+        //     }
+        // }
 
-        return s8_inverted_depths;
+        // 直接返回s7_blurred_depths作为最终结果
+        return s7_blurred_depths;
     }
 };
 #endif // DEPTH_COMPLETION_HPP

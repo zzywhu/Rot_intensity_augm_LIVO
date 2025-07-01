@@ -72,7 +72,7 @@
 #include "Feature/FeatureExtractor.h"
 #include "DataIO/ReadWriter.h"
 #include "Viewer/Viewer.h"
-#include "xfeat/XFeat.h"
+//#include "xfeat/XFeat.h"
 #include"ImageProcess/imageprocess.h"
 #include"MLSD/mlsd.h"
 
@@ -264,6 +264,7 @@ public:
                _denseCloudMap(new PointCloudXYZI()),
                _trajCloud(new PointCloudXYZI()),
                _lidarProcessor(new LidarProcess()),
+               fout_traj(string(ROOT_DIR) + "MapResult/traj.txt",std::ios::out),
                _imuProcessor(new ImuProcess()),
                _initiatorLI(nullptr),
                _jacoRot(MatrixXd(30000, 3)),
@@ -315,7 +316,7 @@ public:
                _timeLastScan(0),
                _dt(0.0),
                _mapCloudQueue(200),
-               _XFDetector(4096,0.5,true),
+               //_XFDetector(4096,0.5,true),
                _loopCloser(nullptr),
                _isLoopCorrected(false),
                _isFirstLidarFrame(true),
@@ -684,7 +685,7 @@ public:
     shared_ptr<LidarProcess>                                                               _lidarProcessor;
     shared_ptr<ImuProcess>                                                                 _imuProcessor;
     shared_ptr<ImuPreintegration>                                                          _imuPreintegration;
-    XFeat::XFDetector                                                                      _XFDetector;
+    //XFeat::XFDetector                                                                      _XFDetector;
     imgProcesser                                                                           _imgProcesser;
     cv::Mat                                                                                _mkpts_0;
     cv::Mat                                                                                _mkpts_1;
@@ -716,6 +717,7 @@ public:
     Eigen::Matrix3d                                                                        _Rl2l;
     Eigen::Vector3d                                                                        _tl2l;
     Eigen::Matrix4d                                                                        _prevTwl;
+    std::ofstream                                                                          fout_traj;
 
     std::vector<Eigen::Matrix4d>                                                           _relToList;
     std::vector<Eigen::Matrix4d>                                                           _relTlList;

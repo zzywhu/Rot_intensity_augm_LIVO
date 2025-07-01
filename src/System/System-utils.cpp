@@ -490,11 +490,20 @@ void System::Savetraj()
                         frameBlock->freeAll();
                         Eigen::Vector3d pose(frameBlock->_poseLo(0, 3),frameBlock->_poseLo(1, 3),frameBlock->_poseLo(2, 3));
                         pose=_rotAlign_traj*pose;
+                        
+                        // Convert rotation matrix to quaternion
+                        Eigen::Matrix3d rot_matrix = frameBlock->_poseLo.block<3,3>(0,0);
+                        Eigen::Quaterniond quat(rot_matrix);
+                        quat.normalize();
+                        
                         //correct imu poses by relposes
-                        if(i==0)
-                        {fout<<i<<" "<<"0 "<<"0 "<<"0 "<<"0 "<<"0 "<<"0 "<<"1"<<std::endl;}
-                        if(i!=0)
-                        {fout<<i<<" "<<pose(0)<<" "<<pose(1)<<" "<<pose(2)<<" "<<"0 "<<"0 "<<"0 "<<"1"<<std::endl;}
+                        if(i==firstIdx)
+                        {fout<<submap->_timestamp<<" "<<pose(0)<<" "<<pose(1)<<" "<<pose(2)<<" "<<quat.x()<<" "<<quat.y()<<" "<<quat.z()<<" "<<quat.w()<<std::endl;}
+                        if(i!=firstIdx)
+                        {
+                            fout << std::fixed << std::setprecision(5); // Set precision to 9 decimal places
+                            fout << _loopCloser->getFrameBlock(i-1)->_timestamp <<" "<<pose(0)<<" "<<pose(1)<<" "<<pose(2)<<" "<<quat.x()<<" "<<quat.y()<<" "<<quat.z()<<" "<<quat.w()<<std::endl;
+                        }
                     }
         }
 }
@@ -504,6 +513,7 @@ void System::Savemap()
 {
         PointCloudXYZI::Ptr pgoCloudPtr(new PointCloudXYZI());
         PointCloudXYZI::Ptr trajCloud(new PointCloudXYZI());
+        PointCloudXYZI::Ptr downSampledCloudPtr(new PointCloudXYZI());
                 const Matrix4ds& relPoses=_loopCloser->getRelPoses();
                 CloudBlockPtrs submaps=_loopCloser->getSubMapBlocks();
                
@@ -524,7 +534,21 @@ void System::Savemap()
                         //correct imu poses by relposes
            PointCloudXYZI::Ptr frameCloud(new PointCloudXYZI());
            pcl::io::loadPCDFile(frameBlock->_pcdFilePath, *frameBlock->_pcRaw);
-           pcl::transformPointCloud(*frameBlock->_pcRaw, *frameCloud, frameBlock->_poseLo);//pw=Tw1*p1
+           
+           // Filter out points with z values greater than 0
+           PointCloudXYZI::Ptr filteredCloud(new PointCloudXYZI());
+           filteredCloud->reserve(frameBlock->_pcRaw->size());
+
+           for (const auto& point : frameBlock->_pcRaw->points) {
+               double dist=sqrt(point.x*point.x+point.y*point.y+point.z*point.z);
+               //if (point.z <= 0&&dist>1&&dist<10) {
+                   filteredCloud->points.push_back(point);
+               //}
+           }
+           filteredCloud->width = filteredCloud->points.size();
+           filteredCloud->height = 1;
+           
+           pcl::transformPointCloud(*filteredCloud, *frameCloud, frameBlock->_poseLo);//pw=Tw1*p1
            *pgoCloudPtr+=*frameCloud;
            
            PointType trajPt;
@@ -534,9 +558,21 @@ void System::Savemap()
            trajCloud->push_back(trajPt) ;
                     }
         }
+
+        pcl::RandomSample<pcl::PointXYZINormal> random_sampler;
+        random_sampler.setInputCloud(pgoCloudPtr);
+
+       // 设置采样点数 = 原始点数的百分比，例如保留30%
+        float sample_ratio = 0.5f;
+        int sample_size = static_cast<int>(pgoCloudPtr->size() * sample_ratio);
+        random_sampler.setSample(sample_size);
+
+        // 执行采样
+        random_sampler.filter(*downSampledCloudPtr);
         pcl::PCDWriter pcdWriter;
         pcdWriter.writeBinary(string(ROOT_DIR) + "MapResult/TrajCloud.pcd", *trajCloud);
         pcdWriter.writeBinary(string(ROOT_DIR) + "MapResult/MapCloud.pcd", *pgoCloudPtr);
+        pcdWriter.writeBinary(string(ROOT_DIR) + "MapResult/MapCloud_down.pcd", *downSampledCloudPtr);
 }
 void System::saveMap(bool isForced)
 {
