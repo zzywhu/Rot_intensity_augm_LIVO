@@ -4,7 +4,7 @@ Official Code of “Maximizing Reflectivity Information: Robust Mobile Mapping S
 
 PCL 1.8.1
 
-eres 2.1.0
+ceres 2.1.0
 
 Eigen 3.3.7
 
