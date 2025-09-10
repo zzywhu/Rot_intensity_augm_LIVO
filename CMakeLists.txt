@@ -424,8 +424,11 @@ target_link_libraries(ZGSlamRosTest SlamCore Misc ${PTHREADS_LIBRARY} ${catkin_L
 add_executable(UndistTest Examples/undis.cpp)
 target_link_libraries(UndistTest SlamCore Misc ${PTHREADS_LIBRARY} ${catkin_LIBRARIES} ${cv_bridge_LIBRARIES})
 
-add_executable(CalibTest Examples/calibtest.cpp)
-target_link_libraries(CalibTest SlamCore Misc ${PTHREADS_LIBRARY} ${catkin_LIBRARIES} ${cv_bridge_LIBRARIES})
+# add_executable(CalibTest Examples/calibtest.cpp)
+# target_link_libraries(CalibTest SlamCore Misc ${PTHREADS_LIBRARY} ${catkin_LIBRARIES} ${cv_bridge_LIBRARIES})
+
+add_executable(Sim Examples/Sim.cpp)
+target_link_libraries(Sim SlamCore Misc ${PTHREADS_LIBRARY} ${catkin_LIBRARIES} ${cv_bridge_LIBRARIES})
 #add_executable(RosSlamTest Examples/RosSlamTest.cpp)
 #target_link_libraries(RosSlamTest SlamCore ${PTHREADS_LIBRARY} ${catkin_LIBRARIES})
 endif()

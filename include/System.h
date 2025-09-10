@@ -73,8 +73,8 @@
 #include "DataIO/ReadWriter.h"
 #include "Viewer/Viewer.h"
 //#include "xfeat/XFeat.h"
-#include"ImageProcess/imageprocess.h"
-#include"MLSD/mlsd.h"
+#include "ImageProcess/imageprocess.h"
+#include "MLSD/mlsd.h"
 
 #ifdef __SHARED_LIBS__
 #ifdef __DLL_EXPORTS__
@@ -88,17 +88,12 @@
 
 using pcl::visualization::PointCloudColorHandlerCustom;
 
-
 #define INIT_TIME (0.1)
 
 const float MOV_THRESHOLD = 1.5f;
 
-
-class SYSTEM_API System
-{
-
-    struct SYSTEM_API Config
-    {
+class SYSTEM_API System {
+    struct SYSTEM_API Config {
         ////////////System common setting////////////
         int _udpateMethod;
         int _matchMethod;
@@ -172,26 +167,25 @@ class SYSTEM_API System
         bool _isLoopEn;
         bool _issavemap;
         bool _isSaveMap;
-        int  _pcdSaveInterval;
+        int _pcdSaveInterval;
 
-        Config()
-        {
-            _imuFilePath="";
-            _rasterFilePath="";
-            _pcapFilePath="";
-            _lidarCorrectFilePath="";
-            _udpateMethod=1;// 0: EKF with IMU, 1: LSQ with IMU, other: LSQ without IMU
-            _matchMethod=1; //# 0: kdtree,  1: voxelmap
-            _isTimeSyncEn=false;
+        Config() {
+            _imuFilePath = "";
+            _rasterFilePath = "";
+            _pcapFilePath = "";
+            _lidarCorrectFilePath = "";
+            _udpateMethod = 1; // 0: EKF with IMU, 1: LSQ with IMU, other: LSQ without IMU
+            _matchMethod = 1;  //# 0: kdtree,  1: voxelmap
+            _isTimeSyncEn = false;
             _isEnable3DViewer = false;
             _isMotorInitialized = true;
             _isImuInitialized = true;
             _isFeatExtractEn = true;
             _isEstiExtrinsic = false;
             _featureExtractSegNum = 6;
-            _minFramePoint=1000;
-            _nSkipFrames=0;
-            _nMergedFrames=0;
+            _minFramePoint = 1000;
+            _nSkipFrames = 0;
+            _nMergedFrames = 0;
 
             _isCutFrame = false;
             _cutFrameNum = 5;
@@ -201,7 +195,7 @@ class SYSTEM_API System
             _dataAccumLength = 300;
             _rotLICov = std::vector<double>(3, 0.00005);
             _transLICov = std::vector<double>(3, 0.0005);
-            _radius_k=3;
+            _radius_k = 3;
             _enableGravityAlign = true;
             _maxInierError = 1;
 
@@ -221,9 +215,9 @@ class SYSTEM_API System
             _RilVec = std::vector<double>(9, 0.0);
             _tigVec = std::vector<double>(3, 0.0);
             _RigVec = std::vector<double>(9, 0.0);
-            _imuMaxInitCount=1000;
-            _gnssInitSize=20;
-            _gnssMaxError=0.3;
+            _imuMaxInitCount = 1000;
+            _gnssInitSize = 20;
+            _gnssMaxError = 0.3;
 
             _maxPointsSize = 100;
             _maxCovPointsSize = 100;
@@ -250,168 +244,186 @@ class SYSTEM_API System
     };
 
 public:
-    System() : _sysID(0),
-               _localCloudPtr(new PointCloudXYZI()),
-               _localSurfCloudPtr(new PointCloudXYZI()),
-               _localCornerCloudPtr(new PointCloudXYZI()),
-               _localCloudDownPtr(new PointCloudXYZI()),
-               _localSurfCloudDownPtr(new PointCloudXYZI()),
-               _localCornerCloudDownPtr(new PointCloudXYZI()),
-               _globalCloudDownPtr(new PointCloudXYZI()),
-               _globalSurfCloudDownPtr(new PointCloudXYZI()),
-               _globalCornerCloudDownPtr(new PointCloudXYZI()),
-               _downCloudMap(new PointCloudXYZI()),
-               _denseCloudMap(new PointCloudXYZI()),
-               _trajCloud(new PointCloudXYZI()),
-               _lidarProcessor(new LidarProcess()),
-               fout_traj(string(ROOT_DIR) + "MapResult/traj.txt",std::ios::out),
-               _imuProcessor(new ImuProcess()),
-               _initiatorLI(nullptr),
-               _jacoRot(MatrixXd(30000, 3)),
-               _trajPts(new PointCloudXYZI()),
-               _trajPropagatPts(new PointCloudXYZI()),
-               _trajGNSSPts(new PointCloudXYZI()),
-               _regVGICP(RegistrationVGICP(1)),
-               _isFinished(false),
-               _curMotorAngle(-1.) ,
-               _initMotorAngle(-1.),
-               _frameNum(0),
-               _moveStartTime(0.0),
-               _onlineCalibStartTime(0.0),
-               _Rwg(Eigen::Matrix3d::Identity()),
-               _twg(Eigen::Vector3d::Zero()),
-               _Rwl(Eigen::Matrix3d::Identity()),
-               _twl(Eigen::Vector3d::Zero()),
-               _prevTwl(Eigen::Matrix4d::Identity()),
-               _Rol(Eigen::Matrix3d::Identity()),
-               _Ril(Eigen::Matrix3d::Identity()),
-               _isResetShow(false),
-               _isEKFInited(false),
-               _isInitMap(false),
-               _isOnlineCalibFinish(false),
-               _isDataAccumFinished(false),
-               _isDataAccumStart(false),
-               _frameId(0),
-               _pcdIndex(0),
-               _cloudDownSize(0),
-               _cloudSurfDownSize(0),
-               _cloudCornerDownSize(0),
-               _lidarBegTime(0),
-               _lastImuTimestamp(-1.0),
-               _lastMotorTimestamp(-1.0),
-               _timediffImuWrtLidar(0.0),
-               _isTimediffSetFlg (false),
-               _lidarEndTime(0),
-               _isLidarPushed(false),
-               _firstLidarTime(0),
-               _scanNum(0),
-               //_pandarReader(nullptr),
-               _dispThread(nullptr),
-               _p(nullptr),
-               _isDispStop(false),
-               _minDispZ(0),
-               _maxDispZ(0),
-               _isLocalMapInitialized(false),
-               _isFirstFrame(true),
-               _timeLastScan(0),
-               _dt(0.0),
-               _mapCloudQueue(200),
-               //_XFDetector(4096,0.5,true),
-               _loopCloser(nullptr),
-               _isLoopCorrected(false),
-               _isFirstLidarFrame(true),
-               _sensorTimeDiff(0),
-               _globalMapPtr(new pcl::PointCloud<pcl::PointXYZ>),
-               _globalCloudXYZPtr(new pcl::PointCloud<pcl::PointXYZ>),
-               _localCloudXYZPtr(new pcl::PointCloud<pcl::PointXYZ>),
-               _sparselinecloud(new pcl::PointCloud<pcl::PointXYZI>),
-               _curlinecloud(new pcl::PointCloud<pcl::PointXYZI>),
-               _sparseworldlinecloud(new pcl::PointCloud<pcl::PointXYZI>),
-               _matchlinecloud(new pcl::PointCloud<pcl::PointXYZI>),
-               _matchworldlinecloud(new pcl::PointCloud<pcl::PointXYZI>),
-               _matchworldlinecloudrgb(new pcl::PointCloud<pcl::PointXYZRGB>),
-                intensityMapdense(new pcl::PointCloud<pcl::PointXYZI>),
-                intensityMapdense_left(new pcl::PointCloud<pcl::PointXYZI>),
-                intensityMapdense_right(new pcl::PointCloud<pcl::PointXYZI>),
-               _Twl(Eigen::Matrix4d::Identity()),
-               _rotAlign(Eigen::Matrix3d::Identity()),
-               _rotAlign_traj(Eigen::Matrix3d::Identity()),
-               _normvec(new PointCloudXYZI(100000, 1)),
-               _cloudAxisTransfer(nullptr),
-               _frameIdDisp(0),
-               _isGnssInited(false),
-               _gnssTrans(Eigen::Matrix4d::Identity()),
-               _gnssDisp(nullptr)
-    {
+    System() :
+        _sysID(0),
+        _localCloudPtr(new PointCloudXYZI()),
+        _localSurfCloudPtr(new PointCloudXYZI()),
+        _localCornerCloudPtr(new PointCloudXYZI()),
+        _localCloudDownPtr(new PointCloudXYZI()),
+        _localSurfCloudDownPtr(new PointCloudXYZI()),
+        _localCornerCloudDownPtr(new PointCloudXYZI()),
+        _globalCloudDownPtr(new PointCloudXYZI()),
+        _globalSurfCloudDownPtr(new PointCloudXYZI()),
+        _globalCornerCloudDownPtr(new PointCloudXYZI()),
+        _downCloudMap(new PointCloudXYZI()),
+        _denseCloudMap(new PointCloudXYZI()),
+        _trajCloud(new PointCloudXYZI()),
+        _lidarProcessor(new LidarProcess()),
+        fout_traj(string(ROOT_DIR) + "MapResult/traj.txt", std::ios::out),
+        _imuProcessor(new ImuProcess()),
+        _initiatorLI(nullptr),
+        _jacoRot(MatrixXd(30000, 3)),
+        _trajPts(new PointCloudXYZI()),
+        _trajPropagatPts(new PointCloudXYZI()),
+        _trajGNSSPts(new PointCloudXYZI()),
+        _regVGICP(RegistrationVGICP(1)),
+        _isFinished(false),
+        _curMotorAngle(-1.),
+        _initMotorAngle(-1.),
+        _frameNum(0),
+        _moveStartTime(0.0),
+        _onlineCalibStartTime(0.0),
+        _Rwg(Eigen::Matrix3d::Identity()),
+        _twg(Eigen::Vector3d::Zero()),
+        _Rwl(Eigen::Matrix3d::Identity()),
+        _twl(Eigen::Vector3d::Zero()),
+        _prevTwl(Eigen::Matrix4d::Identity()),
+        _Rol(Eigen::Matrix3d::Identity()),
+        _Ril(Eigen::Matrix3d::Identity()),
+        _isResetShow(false),
+        _isEKFInited(false),
+        _isInitMap(false),
+        _isOnlineCalibFinish(false),
+        _isDataAccumFinished(false),
+        _isDataAccumStart(false),
+        _frameId(0),
+        _pcdIndex(0),
+        _cloudDownSize(0),
+        _cloudSurfDownSize(0),
+        _cloudCornerDownSize(0),
+        _lidarBegTime(0),
+        _lastImuTimestamp(-1.0),
+        _lastMotorTimestamp(-1.0),
+        _timediffImuWrtLidar(0.0),
+        _isTimediffSetFlg(false),
+        _lidarEndTime(0),
+        _isLidarPushed(false),
+        _firstLidarTime(0),
+        _scanNum(0),
+        //_pandarReader(nullptr),
+        _dispThread(nullptr),
+        _p(nullptr),
+        _isDispStop(false),
+        _minDispZ(0),
+        _maxDispZ(0),
+        _isLocalMapInitialized(false),
+        _isFirstFrame(true),
+        _timeLastScan(0),
+        _dt(0.0),
+        _mapCloudQueue(200),
+        //_XFDetector(4096,0.5,true),
+        _loopCloser(nullptr),
+        _isLoopCorrected(false),
+        _isFirstLidarFrame(true),
+        _sensorTimeDiff(0),
+        _globalMapPtr(new pcl::PointCloud<pcl::PointXYZ>),
+        _globalCloudXYZPtr(new pcl::PointCloud<pcl::PointXYZ>),
+        _localCloudXYZPtr(new pcl::PointCloud<pcl::PointXYZ>),
+        _sparselinecloud(new pcl::PointCloud<pcl::PointXYZI>),
+        _curlinecloud(new pcl::PointCloud<pcl::PointXYZI>),
+        _sparseworldlinecloud(new pcl::PointCloud<pcl::PointXYZI>),
+        _matchlinecloud(new pcl::PointCloud<pcl::PointXYZI>),
+        _matchworldlinecloud(new pcl::PointCloud<pcl::PointXYZI>),
+        _matchworldlinecloudrgb(new pcl::PointCloud<pcl::PointXYZRGB>),
+        intensityMapdense(new pcl::PointCloud<pcl::PointXYZI>),
+        intensityMapdense_left(new pcl::PointCloud<pcl::PointXYZI>),
+        intensityMapdense_right(new pcl::PointCloud<pcl::PointXYZI>),
+        _Twl(Eigen::Matrix4d::Identity()),
+        _rotAlign(Eigen::Matrix3d::Identity()),
+        _rotAlign_traj(Eigen::Matrix3d::Identity()),
+        _normvec(new PointCloudXYZI(100000, 1)),
+        _cloudAxisTransfer(nullptr),
+        _frameIdDisp(0),
+        _isGnssInited(false),
+        _gnssTrans(Eigen::Matrix4d::Identity()),
+        _gnssDisp(nullptr) {
         _resLast = new float[100000];
-        for(int i=0;i<100000;i++)
+        for (int i = 0; i < 100000; i++)
             _resLast[i] = float(0.0);
 
         _isPointSelectedSurf = new bool[100000];
-        for(int i=0;i<100000;i++)
+        for (int i = 0; i < 100000; i++)
             _isPointSelectedSurf[i] = bool(0);
 
-        _fTimeOfs =std::ofstream(string(ROOT_DIR) +"result/timeCost.txt", std::ios::trunc | std::ios::in);
+        _fTimeOfs = std::ofstream(string(ROOT_DIR) + "result/timeCost.txt", std::ios::trunc | std::ios::in);
     }
 
-    ~System()
-    {
+    ~System() {
         delete _resLast;
         delete _isPointSelectedSurf;
     }
 
-    void shutdown()
-    {
-        if(_loopCloser)
-        {
-            if (!_loopCloser->isFinished())
-            {
+    void shutdown() {
+        if (_loopCloser) {
+            if (!_loopCloser->isFinished()) {
                 _loopCloser->requestFinish();
-                std::cout<<"Loopcloser request finish"<<std::endl;
+                std::cout << "Loopcloser request finish" << std::endl;
                 while (!_loopCloser->isFinished())
                     usleep(5000);
             }
             delete _loopCloser;
-            _loopCloser=nullptr;
+            _loopCloser = nullptr;
         }
 
-        if(_dispThread)
-        {
-            std::cout<<"Shutdown pcl visualization ...";
-            _isDispStop=true;
+        if (_dispThread) {
+            std::cout << "Shutdown pcl visualization ...";
+            _isDispStop = true;
             _dispThread->join();
             _p->close();
             delete _dispThread;
-            _dispThread=nullptr;
+            _dispThread = nullptr;
         }
 
-            //while (!_p->wasStopped())
-               // usleep(5000);
-
+        //while (!_p->wasStopped())
+        // usleep(5000);
     }
 
-    static Config &mutableConfig() { return _config; }
-    static const Config &config() { return _config; }
+    static Config &mutableConfig() {
+        return _config;
+    }
+    static const Config &config() {
+        return _config;
+    }
 
-    StatesGroup& getCurState(){return _stateCur;}
+    StatesGroup &getCurState() {
+        return _stateCur;
+    }
 
-    Eigen::Matrix3d& Rol(){return _Rol;}
-    Eigen::Vector3d& tol(){return _tol;}
+    Eigen::Matrix3d &Rol() {
+        return _Rol;
+    }
+    Eigen::Vector3d &tol() {
+        return _tol;
+    }
 
-    Eigen::Matrix3d& Ril(){return _Ril;}
-    Eigen::Vector3d& til(){return _til;}
+    Eigen::Matrix3d &Ril() {
+        return _Ril;
+    }
+    Eigen::Vector3d &til() {
+        return _til;
+    }
 
-    LoopCloser* loopCloser(){return _loopCloser;}
+    LoopCloser *loopCloser() {
+        return _loopCloser;
+    }
 
-    deque<SensorMsgs::ImuData::Ptr>& imuBufferAll(){return _imuBufferAll;}
+    deque<SensorMsgs::ImuData::Ptr> &imuBufferAll() {
+        return _imuBufferAll;
+    }
 
-    std::list<pair<double, double>>& motorAngleBufferAll(){return _motorAngleBufAll;}
+    std::list<pair<double, double>> &motorAngleBufferAll() {
+        return _motorAngleBufAll;
+    }
 
     //PandarGeneral* pandarReader(){return _pandarReader;}
 
-    long int getCurFrameID() { return _frameId; }
+    long int getCurFrameID() {
+        return _frameId;
+    }
 
-    void setID(const int id) { _sysID = id; }
+    void setID(const int id) {
+        _sysID = id;
+    }
 
     bool start();
 
@@ -431,31 +443,29 @@ public:
 
     void fileoutCalibResult(ofstream &foutResult, const StatesGroup &state, const double &timeLagIMUWrtLidar);
 
-//private:
+    //private:
 public:
-
     float calcDist(const PointType &p1, const PointType &p2);
 
-    static bool varContrast(PointWithCov &x, PointWithCov &y)
-    {
+    static bool varContrast(PointWithCov &x, PointWithCov &y) {
         return (x.obsCov.diagonal().norm() < y.obsCov.diagonal().norm());
     };
 
     void updateDenseMap(PointCloudXYZI::Ptr cloudPtr);
 
-    void pointBodyToWorld(state_ikfom& stateCur, PointType const *const pi, PointType *const po);
+    void pointBodyToWorld(state_ikfom &stateCur, PointType const *const pi, PointType *const po);
 
-    void pointBodyToWorld(StatesGroup& stateCur, PointType const *const pi, PointType *const po);
+    void pointBodyToWorld(StatesGroup &stateCur, PointType const *const pi, PointType *const po);
 
     void transCloud(const PointCloudXYZI::Ptr &cloudIn, PointCloudXYZI::Ptr &cloudOut,
                     const Eigen::Matrix3d &Rol, const Eigen::Vector3d &tol);
     void transCloud2(const PointCloudXYZI::Ptr &cloudIn, pcl::PointCloud<pcl::PointXYZI>::Ptr &cloudOut,
-        const Eigen::Matrix3d &Rol, const Eigen::Vector3d &tol);     
-    void transCloud3(const pcl::PointCloud<pcl::PointXYZI>::Ptr &cloudIn, 
-            pcl::PointCloud<pcl::PointXYZI>::Ptr &cloudOut,
-            const Eigen::Matrix3d &Rol, 
-            const Eigen::Vector3d &tol);     
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertPointCloudWithLines(const pcl::PointCloud<pcl::PointXYZI>::Ptr& input_cloud);     
+                     const Eigen::Matrix3d &Rol, const Eigen::Vector3d &tol);
+    void transCloud3(const pcl::PointCloud<pcl::PointXYZI>::Ptr &cloudIn,
+                     pcl::PointCloud<pcl::PointXYZI>::Ptr &cloudOut,
+                     const Eigen::Matrix3d &Rol,
+                     const Eigen::Vector3d &tol);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr convertPointCloudWithLines(const pcl::PointCloud<pcl::PointXYZI>::Ptr &input_cloud);
 
     void transCloudInMotorAxis(const PointCloudXYZI::Ptr &cloudIn, PointCloudXYZI::Ptr &cloudOut,
                                const double &angle, const Eigen::Matrix3d &Rol, const Eigen::Vector3d &tol);
@@ -463,13 +473,13 @@ public:
     void convertToRGBCloud(PointCloudXYZI &cloudIn, pcl::PointCloud<pcl::PointXYZRGB> &cloudRGB);
 
     /// viewer
-    void voxelMap2RGBClouds(const std::unordered_map<VOXEL_LOC, OctoTree *>& voxelMap,PointCloudXYZRGB::Ptr octClouds);
+    void voxelMap2RGBClouds(const std::unordered_map<VOXEL_LOC, OctoTree *> &voxelMap, PointCloudXYZRGB::Ptr octClouds);
 
     void initPCLViewer();
 
     void resetViewer();
 
-    void updateViewer(bool bForceUpdateMap=false);
+    void updateViewer(bool bForceUpdateMap = false);
 
     void updateTrajectory();
 
@@ -493,9 +503,9 @@ public:
 
     /// viewer
 
-    void printState(const state_ikfom& state, const std::string& prefix="Final Result");
+    void printState(const state_ikfom &state, const std::string &prefix = "Final Result");
 
-    void printState(const std::string& prefix="Final Result");
+    void printState(const std::string &prefix = "Final Result");
 
     void printProgress(double percentage);
 
@@ -508,12 +518,14 @@ public:
     int matchKdTree(const PointCloudXYZI::Ptr &localCloudPtr, const PointCloudXYZI::Ptr &globalCloudPtr,
                     KD_TREE &kdTree, MatchedInfoList &matches);
 
-    void saveMap(bool isForced=false);
+    void saveMap(bool isForced = false);
     void Savemap();
     void Savetraj();
     void motorMotionCompensation();
 
     void motorMotionCompensationZG();
+
+    void motorMotionCompensationZGforSIM();
 
     bool lidarMotionCompensationWithTimestamp(typename pcl::PointCloud<PointType>::Ptr &cloudInOut,
                                               const Eigen::Matrix4d &T12, // T12 (from k+1 to k frame)
@@ -553,19 +565,18 @@ public:
 
     void processCloudESIKF();
 
-    cv::Mat projectToXZ(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud,bool isinter);
+    cv::Mat projectToXZ(pcl::PointCloud<pcl::PointXYZI>::Ptr &cloud, bool isinter);
 
-    cv::Mat overlayRedOnGrayscale(const cv::Mat& gray1, const cv::Mat& gray2);
+    cv::Mat overlayRedOnGrayscale(const cv::Mat &gray1, const cv::Mat &gray2);
 
-    cv::Mat stackImagesVertical(const cv::Mat& gray1, const cv::Mat& gray2);
+    cv::Mat stackImagesVertical(const cv::Mat &gray1, const cv::Mat &gray2);
 
-    cv::Mat interpolateBlackRegions(const cv::Mat& inputImage);
+    cv::Mat interpolateBlackRegions(const cv::Mat &inputImage);
 
-    void removeLines(cv::Mat& img);
+    void removeLines(cv::Mat &img);
 
-    void filterBrightness(cv::Mat& img);
+    void filterBrightness(cv::Mat &img);
 
-    
     void imagecreator_calib();
     void imagecreatortest();
     void imagecreatoropt();
@@ -585,19 +596,20 @@ public:
 
     void updateFrontendMap();
 
-    void updateLoopStatus(state_ikfom& state);
+    void updateLoopStatus(state_ikfom &state);
 
-    void updateLoopStatus(StatesGroup& state);
+    void updateLoopStatus(StatesGroup &state);
 
-    void loopClosing(state_ikfom& state);
+    void loopClosing(state_ikfom &state);
 
-    void loopClosing(StatesGroup& state);
+    void loopClosing(StatesGroup &state);
 
     void processGNSS();
 
     void mapping();
     void mapping_undist();
     void mapping_calib();
+    void mapping_sim();
     bool syncPackages(MeasureGroup &meas);
 
     void collectMotorIMU();
@@ -608,278 +620,274 @@ public:
 
     void voxelFilter(pcl::PointCloud<PointType>::Ptr &cloudIn, pcl::PointCloud<PointType>::Ptr &cloudOut, float gridSize);
 
-    void saveLastTaskInfo(const std::string& lastTaskPath);
+    void saveLastTaskInfo(const std::string &lastTaskPath);
 
-    bool readLastTaskInfo(const std::string& lastTaskPath, float *refXYZ, pcl::PointCloud<PointType>::Ptr &lastSubmap);
+    bool readLastTaskInfo(const std::string &lastTaskPath, float *refXYZ, pcl::PointCloud<PointType>::Ptr &lastSubmap);
 
-    bool processContinualTask(const std::string& lastTaskPath);
+    bool processContinualTask(const std::string &lastTaskPath);
 
-    struct surfmaplist
-    {
-        std::vector<cv::Mat>surfmap;
-
-
+    struct surfmaplist {
+        std::vector<cv::Mat> surfmap;
     };
 
-
 public:
-    static Config                                                                          _config;
-    int                                                                                    _sysID;
+    static Config _config;
+    int _sysID;
 
-    pcl::visualization::PCLVisualizer*                                                     _p;
-    int                                                                                    _vp1;
+    pcl::visualization::PCLVisualizer *_p;
+    int _vp1;
 
-    bool                                                                                   _isResetShow;
-    bool                                                                                   _isEKFInited;
-    bool                                                                                   _isInitMap;
-    bool                                                                                   _isOnlineCalibFinish;
-    bool                                                                                   _isDataAccumFinished;
-    bool                                                                                   _isDataAccumStart;
+    bool _isResetShow;
+    bool _isEKFInited;
+    bool _isInitMap;
+    bool _isOnlineCalibFinish;
+    bool _isDataAccumFinished;
+    bool _isDataAccumStart;
 
-    ofstream                                                                               _foutResult;
+    ofstream _foutResult;
 
-    long int                                                                               _frameId;
-    int                                                                                    _pcdIndex;
+    long int _frameId;
+    int _pcdIndex;
 
-    int                                                                                    _cloudDownSize;
-    int                                                                                    _cloudSurfDownSize;
-    int                                                                                    _cloudCornerDownSize;
-    PointCloudXYZI::Ptr                                                                    _localCloudPtr;
-    PointCloudXYZI::Ptr                                                                    _localSurfCloudPtr;
-    PointCloudXYZI::Ptr                                                                    _localCornerCloudPtr;
-    boost::circular_buffer<PointCloudXYZI::Ptr>                                            _mapCloudQueue;
-    cv::Mat                                                                                _intensityImg;
-    cv::Mat                                                                                _intensityImg_left;
-    cv::Mat                                                                                _intensityImg_right;
-    pcl::PointCloud<pcl::PointXYZI>::Ptr                                                   intensityMapdense;
-    pcl::PointCloud<pcl::PointXYZI>::Ptr                                                   intensityMapdense_left;
-    pcl::PointCloud<pcl::PointXYZI>::Ptr                                                   intensityMapdense_right;
-    cv::Mat                                                                                _matchImg;
-    cv::Mat                                                                                _matchImg_left;
-    cv::Mat                                                                                _matchImg_right;
-    PointCloudXYZI::Ptr                                                                    _localCloudDownPtr;
-    PointCloudXYZI::Ptr                                                                    _localSurfCloudDownPtr;
-    PointCloudXYZI::Ptr                                                                    _localCornerCloudDownPtr;
+    int _cloudDownSize;
+    int _cloudSurfDownSize;
+    int _cloudCornerDownSize;
+    PointCloudXYZI::Ptr _localCloudPtr;
+    PointCloudXYZI::Ptr _localSurfCloudPtr;
+    PointCloudXYZI::Ptr _localCornerCloudPtr;
+    boost::circular_buffer<PointCloudXYZI::Ptr> _mapCloudQueue;
+    cv::Mat _intensityImg;
+    cv::Mat _intensityImg_left;
+    cv::Mat _intensityImg_right;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr intensityMapdense;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr intensityMapdense_left;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr intensityMapdense_right;
+    cv::Mat _matchImg;
+    cv::Mat _matchImg_left;
+    cv::Mat _matchImg_right;
+    PointCloudXYZI::Ptr _localCloudDownPtr;
+    PointCloudXYZI::Ptr _localSurfCloudDownPtr;
+    PointCloudXYZI::Ptr _localCornerCloudDownPtr;
 
-    PointCloudXYZI::Ptr                                                                    _globalCloudDownPtr;
-    PointCloudXYZI::Ptr                                                                    _globalSurfCloudDownPtr;
-    PointCloudXYZI::Ptr                                                                    _globalCornerCloudDownPtr;
+    PointCloudXYZI::Ptr _globalCloudDownPtr;
+    PointCloudXYZI::Ptr _globalSurfCloudDownPtr;
+    PointCloudXYZI::Ptr _globalCornerCloudDownPtr;
 
-    PointCloudXYZI::Ptr                                                                    _downCloudMap;
-    PointCloudXYZI::Ptr                                                                    _denseCloudMap;
-    PointCloudXYZI::Ptr                                                                    _trajCloud;
-    pcl::PointCloud<pcl::PointXYZI>::Ptr                                                   _sparselinecloud;
-    pcl::PointCloud<pcl::PointXYZI>::Ptr                                                   _curlinecloud;
-    pcl::PointCloud<pcl::PointXYZI>::Ptr                                                   _sparseworldlinecloud;
-    pcl::PointCloud<pcl::PointXYZI>::Ptr                                                   _matchlinecloud;
-    pcl::PointCloud<pcl::PointXYZI>::Ptr                                                   _matchworldlinecloud;
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr                                                 _matchworldlinecloudrgb;
-    cv::Mat                                                                                _cannyimg;
+    PointCloudXYZI::Ptr _downCloudMap;
+    PointCloudXYZI::Ptr _denseCloudMap;
+    PointCloudXYZI::Ptr _trajCloud;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr _sparselinecloud;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr _curlinecloud;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr _sparseworldlinecloud;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr _matchlinecloud;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr _matchworldlinecloud;
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr _matchworldlinecloudrgb;
+    cv::Mat _cannyimg;
 
-    vector<PointVector>                                                                    _nearestPoints;
-    PointVector                                                                            _addedPoints;
-    KD_TREE                                                                                _ikdtree;
-    std::unordered_map<VOXEL_LOC, OctoTree *>                                              _voxelSurfMap;
-    std::unordered_map<VOXEL_LOC, OctoTree *>                                              _voxelCornMap;
+    vector<PointVector> _nearestPoints;
+    PointVector _addedPoints;
+    KD_TREE _ikdtree;
+    std::unordered_map<VOXEL_LOC, OctoTree *> _voxelSurfMap;
+    std::unordered_map<VOXEL_LOC, OctoTree *> _voxelCornMap;
 
-    shared_ptr<LidarProcess>                                                               _lidarProcessor;
-    shared_ptr<ImuProcess>                                                                 _imuProcessor;
-    shared_ptr<ImuPreintegration>                                                          _imuPreintegration;
+    shared_ptr<LidarProcess> _lidarProcessor;
+    shared_ptr<ImuProcess> _imuProcessor;
+    shared_ptr<ImuPreintegration> _imuPreintegration;
     //XFeat::XFDetector                                                                      _XFDetector;
-    imgProcesser                                                                           _imgProcesser;
-    cv::Mat                                                                                _mkpts_0;
-    cv::Mat                                                                                _mkpts_1;
-    cv::Mat                                                                                _scanlineIdMap;
-    surfmaplist                                                                            _surfmaplist;
-    std::unordered_map<VOXEL_LOC, Voxel*>                                                  _sparsevoxelmap;
+    imgProcesser _imgProcesser;
+    cv::Mat _mkpts_0;
+    cv::Mat _mkpts_1;
+    cv::Mat _scanlineIdMap;
+    surfmaplist _surfmaplist;
+    std::unordered_map<VOXEL_LOC, Voxel *> _sparsevoxelmap;
     // raster angle
-    double                                                                                 _curMotorAngle;
-    double                                                                                 _initMotorAngle;
+    double _curMotorAngle;
+    double _initMotorAngle;
 
     // Extrinsic
     //  motor <- lidar
-    Eigen::Matrix3d                                                                        _Rol;
-    Eigen::Vector3d                                                                        _tol;
+    Eigen::Matrix3d _Rol;
+    Eigen::Vector3d _tol;
     // imu <- motor
-    Eigen::Matrix3d                                                                        _Ril;
-    Eigen::Vector3d                                                                        _til;
+    Eigen::Matrix3d _Ril;
+    Eigen::Vector3d _til;
     // imu <- RTK
-    Eigen::Matrix3d                                                                        _Rig;
-    Eigen::Vector3d                                                                        _tig;
+    Eigen::Matrix3d _Rig;
+    Eigen::Vector3d _tig;
     // GNSS pose
-    Eigen::Matrix3d                                                                        _Rwg;
-    Eigen::Vector3d                                                                        _twg;
+    Eigen::Matrix3d _Rwg;
+    Eigen::Vector3d _twg;
     // Lidar pose
-    Eigen::Matrix3d                                                                        _Rwl;
-    Eigen::Vector3d                                                                        _twl;
-    Eigen::Matrix3d                                                                        _Rwlprop;
-    Eigen::Vector3d                                                                        _twlprop;
-    Eigen::Matrix3d                                                                        _Rl2l;
-    Eigen::Vector3d                                                                        _tl2l;
-    Eigen::Matrix4d                                                                        _prevTwl;
-    std::ofstream                                                                          fout_traj;
+    Eigen::Matrix3d _Rwl;
+    Eigen::Vector3d _twl;
+    Eigen::Matrix3d _Rwlprop;
+    Eigen::Vector3d _twlprop;
+    Eigen::Matrix3d _Rl2l;
+    Eigen::Vector3d _tl2l;
+    Eigen::Matrix4d _prevTwl;
+    std::ofstream fout_traj;
 
-    std::vector<Eigen::Matrix4d>                                                           _relToList;
-    std::vector<Eigen::Matrix4d>                                                           _relTlList;
+    std::vector<Eigen::Matrix4d> _relToList;
+    std::vector<Eigen::Matrix4d> _relTlList;
 
     // // LI Calib Parameters
 
-    int                                                                                    _frameNum;
-    double                                                                                 _moveStartTime;
-    double                                                                                 _onlineCalibStartTime;
+    int _frameNum;
+    double _moveStartTime;
+    double _onlineCalibStartTime;
 
-    shared_ptr<LI_Init>                                                                    _initiatorLI;
+    shared_ptr<LI_Init> _initiatorLI;
 
-    MatrixXd                                                                               _jacoRot;
-    MD(DIM_STATE, DIM_STATE)                                                               _G;
-    MD(DIM_STATE, DIM_STATE)                                                               _H_T_H;
-    MD(DIM_STATE, DIM_STATE)                                                               _I_STATE;
+    MatrixXd _jacoRot;
+    MD(DIM_STATE, DIM_STATE)
+    _G;
+    MD(DIM_STATE, DIM_STATE)
+    _H_T_H;
+    MD(DIM_STATE, DIM_STATE)
+    _I_STATE;
 
-    MeasureGroup                                                                           _measures;
-    StatesGroup                                                                            _stateCur;
-    StatesGroup                                                                            _statePropagat;
+    MeasureGroup _measures;
+    StatesGroup _stateCur;
+    StatesGroup _statePropagat;
 
-    esekfom::esekf<state_ikfom, 12, input_ikfom>                                           _kf;
-    state_ikfom                                                                            _stateIkfom;
-    state_ikfom                                                                            _statePropIkfom;
+    esekfom::esekf<state_ikfom, 12, input_ikfom> _kf;
+    state_ikfom _stateIkfom;
+    state_ikfom _statePropIkfom;
 
-    mutex                                                                                  _mtxBuffer;
-    condition_variable                                                                     _sigBuffer;
-    double                                                                                 _lidarBegTime;
-    double                                                                                 _lastImuTimestamp;
-    double                                                                                 _lastMotorTimestamp;
-    double                                                                                 _lastGPSTimestamp;
-    double                                                                                 _timediffImuWrtLidar;
-    bool                                                                                   _isTimediffSetFlg;
-    double                                                                                 _lidarEndTime;
-    bool                                                                                   _isLidarPushed;
-    double                                                                                 _firstLidarTime;
+    mutex _mtxBuffer;
+    condition_variable _sigBuffer;
+    double _lidarBegTime;
+    double _lastImuTimestamp;
+    double _lastMotorTimestamp;
+    double _lastGPSTimestamp;
+    double _timediffImuWrtLidar;
+    bool _isTimediffSetFlg;
+    double _lidarEndTime;
+    bool _isLidarPushed;
+    double _firstLidarTime;
 
-    int                                                                                    _scanNum;
+    int _scanNum;
 
-    std::deque<double>                                                                     _timeBuffer;
-    std::deque<PointCloudXYZI::Ptr>                                                        _lidarBuffer;
-    std::deque<SensorMsgs::ImuData::Ptr>                                                   _imuBuffer;
-    std::list<pair<double, double>>                                                        _motorAngleBuf;
-    std::deque<SensorMsgs::GNSSData::Ptr>                                                  _gpsBuffer;
-    std::deque<SensorMsgs::ImuData::Ptr>                                                   _imuBufferAll;
-    std::list<pair<double, double>>                                                        _motorAngleBufAll;
-    std::deque<SensorMsgs::GNSSData::Ptr>                                                  _gpsBufferAll;
-    std::deque<std::pair<SensorMsgs::GNSSData::Ptr, int>>                                  _gpsConstraintBuf;
+    std::deque<double> _timeBuffer;
+    std::deque<PointCloudXYZI::Ptr> _lidarBuffer;
+    std::deque<SensorMsgs::ImuData::Ptr> _imuBuffer;
+    std::list<pair<double, double>> _motorAngleBuf;
+    std::deque<SensorMsgs::GNSSData::Ptr> _gpsBuffer;
+    std::deque<SensorMsgs::ImuData::Ptr> _imuBufferAll;
+    std::list<pair<double, double>> _motorAngleBufAll;
+    std::deque<SensorMsgs::GNSSData::Ptr> _gpsBufferAll;
+    std::deque<std::pair<SensorMsgs::GNSSData::Ptr, int>> _gpsConstraintBuf;
     //PandarGeneral *                                                                        _pandarReader;
 
-    MatchedInfoList                                                                        _matchInfos;
+    MatchedInfoList _matchInfos;
 
+    queue<PointCloudXYZI::Ptr> _localCloudQueue;
+    queue<PointCloudXYZI::Ptr> _localCloudDownQueue;
+    queue<PointCloudXYZI::Ptr> _localPlaneDownQueue;
+    queue<PointCloudXYZI::Ptr> _localLineDownQueue;
+    queue<PointCloudXYZI::Ptr> _downCloudMapQueue;
+    queue<state_ikfom> _stateQueue;
+    queue<state_ikfom> _statePropagatQueue;
+    queue<Eigen::Matrix3d> _RQueue;
+    queue<Eigen::Vector3d> _tQueue;
+    queue<double> _motorAngleQueue;
+    queue<PointCloudXYZRGB::Ptr> _voxelCloudQueue;
+    queue<std::vector<MatchOctoTreeInfo>> _matchedSurfListQueue;
+    queue<std::vector<std::pair<int, int>>> _lcIdxPairsQueue;
+    queue<SensorMsgs::GNSSData::Ptr> _gnssQueue;
 
+    long int _frameIdDisp;
+    PointCloudXYZRGB::Ptr _voxelMapCloudDisp;
+    PointCloudXYZI::Ptr _localCloudDisp;
+    PointCloudXYZI::Ptr _localCloudDownDisp;
+    PointCloudXYZI::Ptr _localPlaneDownDisp;
+    PointCloudXYZI::Ptr _localLineDownDisp;
+    PointCloudXYZI::Ptr _downCloudMapDisp;
+    state_ikfom _stateDisp;
+    state_ikfom _statePropagatDisp;
+    Eigen::Matrix3d _RDisp;
+    Eigen::Vector3d _tDisp;
+    double _motorAngleDisp;
+    std::vector<MatchOctoTreeInfo> _matchedSurfListDisp;
+    std::vector<std::pair<int, int>> _lcIdxPairsDisp;
+    SensorMsgs::GNSSData::Ptr _gnssDisp;
 
-    queue<PointCloudXYZI::Ptr>                                                             _localCloudQueue;
-    queue<PointCloudXYZI::Ptr>                                                             _localCloudDownQueue;
-    queue<PointCloudXYZI::Ptr>                                                             _localPlaneDownQueue;
-    queue<PointCloudXYZI::Ptr>                                                             _localLineDownQueue;
-    queue<PointCloudXYZI::Ptr>                                                             _downCloudMapQueue;
-    queue< state_ikfom >                                                                   _stateQueue;
-    queue< state_ikfom >                                                                   _statePropagatQueue;
-    queue<Eigen::Matrix3d>                                                                 _RQueue;
-    queue<Eigen::Vector3d>                                                                 _tQueue;
-    queue<double>                                                                          _motorAngleQueue;
-    queue<PointCloudXYZRGB::Ptr>                                                           _voxelCloudQueue;
-    queue<std::vector<MatchOctoTreeInfo>>                                                  _matchedSurfListQueue;
-    queue<std::vector<std::pair<int, int>>>                                                _lcIdxPairsQueue;
-    queue<SensorMsgs::GNSSData::Ptr>                                                       _gnssQueue;
+    PointCloudXYZI::Ptr _trajPts;
+    PointCloudXYZI::Ptr _trajPropagatPts;
+    PointCloudXYZI::Ptr _trajGNSSPts;
+    std::vector<Colour> _voxelColors;
 
-    long int                                                                               _frameIdDisp;
-    PointCloudXYZRGB::Ptr                                                                  _voxelMapCloudDisp;
-    PointCloudXYZI::Ptr                                                                    _localCloudDisp;
-    PointCloudXYZI::Ptr                                                                    _localCloudDownDisp;
-    PointCloudXYZI::Ptr                                                                    _localPlaneDownDisp;
-    PointCloudXYZI::Ptr                                                                    _localLineDownDisp;
-    PointCloudXYZI::Ptr                                                                    _downCloudMapDisp;
-    state_ikfom                                                                            _stateDisp;
-    state_ikfom                                                                            _statePropagatDisp;
-    Eigen::Matrix3d                                                                        _RDisp;
-    Eigen::Vector3d                                                                        _tDisp;
-    double                                                                                 _motorAngleDisp;
-    std::vector<MatchOctoTreeInfo>                                                         _matchedSurfListDisp;
-    std::vector<std::pair<int, int>>                                                       _lcIdxPairsDisp;
-    SensorMsgs::GNSSData::Ptr                                                              _gnssDisp;
+    std::mutex _dispMutex;
+    std::thread *_dispThread;
+    bool _isDispStop;
 
-    PointCloudXYZI::Ptr                                                                    _trajPts;
-    PointCloudXYZI::Ptr                                                                    _trajPropagatPts;
-    PointCloudXYZI::Ptr                                                                    _trajGNSSPts;
-    std::vector<Colour>                                                                    _voxelColors;
+    double _minDispZ;
+    double _maxDispZ;
 
-    std::mutex                                                                             _dispMutex;
-    std::thread*                                                                           _dispThread;
-    bool                                                                                   _isDispStop;
+    RegistrationICP _regICP;
+    RegistrationVGICP _regVGICP;
+    RegistrationPCL_VGICP<pcl::PointXYZ, pcl::PointXYZ> _regPCL_VGICP;
 
-    double                                                                                 _minDispZ;
-    double                                                                                 _maxDispZ;
+    std::unique_ptr<GaussianVoxelMap<PointType>> _voxelMapGaussian;
 
-    RegistrationICP                                                                        _regICP;
-    RegistrationVGICP                                                                      _regVGICP;
-    RegistrationPCL_VGICP<pcl::PointXYZ, pcl::PointXYZ>                                    _regPCL_VGICP;
+    vector<BoxPointType> _cubNeedrm;
+    bool _isLocalMapInitialized;
+    BoxPointType _localMapPoints;
 
-    std::unique_ptr<GaussianVoxelMap<PointType>>                                           _voxelMapGaussian;
+    bool _isFirstFrame;
+    double _timeLastScan;
+    double _dt;
 
-    vector<BoxPointType>                                                                   _cubNeedrm;
-    bool                                                                                   _isLocalMapInitialized;
-    BoxPointType                                                                           _localMapPoints;
+    std::vector<double> _rotDeltas;
+    std::vector<double> _posDeltas;
 
-    bool                                                                                   _isFirstFrame;
-    double                                                                                 _timeLastScan;
-    double                                                                                 _dt;
+    std::vector<MatchOctoTreeInfo> _matchedSurfList;
+    std::vector<MatchOctoTreeInfo> _matchedCornerList;
+    std::vector<int> _matchSurfSizeList;
+    std::vector<int> _matchCornerSizeList;
+    std::vector<PointWithCov> _curSurfPvList;
+    std::vector<PointWithCov> _curCornerPvList;
+    std::vector<BoxPointType> _boxToDel;
+    std::vector<std::vector<int>> _linelist;
+    std::vector<std::vector<int>> _linelist_left;
+    std::vector<std::vector<int>> _linelist_right;
+    std::vector<Matchlinelist> _matchlinelist;
+    std::vector<Matchlinelist> _matchlinelist_left;
+    std::vector<Matchlinelist> _matchlinelist_right;
 
-    std::vector<double>                                                                    _rotDeltas;
-    std::vector<double>                                                                    _posDeltas;
+    LoopCloser *_loopCloser;
+    bool _isLoopCorrected;
 
-    std::vector<MatchOctoTreeInfo>                                                         _matchedSurfList;
-    std::vector<MatchOctoTreeInfo>                                                         _matchedCornerList;
-    std::vector<int>                                                                       _matchSurfSizeList;
-    std::vector<int>                                                                       _matchCornerSizeList;
-    std::vector<PointWithCov>                                                              _curSurfPvList;
-    std::vector<PointWithCov>                                                              _curCornerPvList;
-    std::vector<BoxPointType>                                                              _boxToDel;
-    std::vector<std::vector<int>>                                                          _linelist;
-    std::vector<std::vector<int>>                                                          _linelist_left;
-    std::vector<std::vector<int>>                                                          _linelist_right;
-    std::vector<Matchlinelist>                                                             _matchlinelist;
-    std::vector<Matchlinelist>                                                             _matchlinelist_left;
-    std::vector<Matchlinelist>                                                             _matchlinelist_right;
+    bool _isFirstLidarFrame;
+    double _sensorTimeDiff;
 
-    LoopCloser*                                                                            _loopCloser;
-    bool                                                                                   _isLoopCorrected;
+    bool _isFinished;
 
-    bool                                                                                   _isFirstLidarFrame;
-    double                                                                                 _sensorTimeDiff;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr _globalMapPtr;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr _globalCloudXYZPtr;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr _localCloudXYZPtr;
+    Eigen::Matrix4d _Twl;
+    fast_gicp::FastVGICP<pcl::PointXYZ, pcl::PointXYZ> _fastVGICPReg;
 
-    bool                                                                                   _isFinished;
+    LoamTracker _loamTracker;
 
-    pcl::PointCloud<pcl::PointXYZ>::Ptr                                                    _globalMapPtr;
-    pcl::PointCloud<pcl::PointXYZ>::Ptr                                                    _globalCloudXYZPtr;
-    pcl::PointCloud<pcl::PointXYZ>::Ptr                                                    _localCloudXYZPtr;
-    Eigen::Matrix4d                                                                        _Twl;
-    fast_gicp::FastVGICP<pcl::PointXYZ, pcl::PointXYZ>                                     _fastVGICPReg;
+    Eigen::Vector3d _globalGrav;
+    Eigen::Matrix3d _rotAlign;
+    Eigen::Matrix3d _rotAlign_traj;
+    PointCloudXYZI::Ptr _normvec;
+    bool *_isPointSelectedSurf;
+    float *_resLast;
 
-    LoamTracker                                                                            _loamTracker;
+    std::set<OctoTree *> _voxelCovUpdated;
 
-    Eigen::Vector3d                                                                        _globalGrav;
-    Eigen::Matrix3d                                                                        _rotAlign;
-    Eigen::Matrix3d                                                                        _rotAlign_traj;
-    PointCloudXYZI::Ptr                                                                    _normvec;
-    bool*                                                                                  _isPointSelectedSurf;
-    float*                                                                                 _resLast;
+    ZGAxisTransfer *_cloudAxisTransfer;
 
-    std::set<OctoTree *>                                                                   _voxelCovUpdated;
+    std::ofstream _fTimeOfs;
+    bool _isGnssInited;
+    Eigen::Matrix4d _gnssTrans;
+    std::vector<Eigen::Matrix4d> _TilList;
 
-    ZGAxisTransfer*                                                                        _cloudAxisTransfer;
-
-    std::ofstream                                                                          _fTimeOfs;
-    bool                                                                                   _isGnssInited;
-    Eigen::Matrix4d                                                                        _gnssTrans;
-    std::vector<Eigen::Matrix4d>                                                           _TilList;
-
-    SensorMsgs::GNSSData::Ptr                                                              _lastGNSSData;
-
+    SensorMsgs::GNSSData::Ptr _lastGNSSData;
 };
 
 #endif // SRC_SYSTEM_H

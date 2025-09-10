@@ -9,14 +9,14 @@ rigelslam_rot:
   scanSceneName: Street
   isOutputIMU: true
   isOutputFeature: false
-  minRange: 1.5
-  maxRange: 80
+  minRange: 2.0
+  maxRange: 80.0
   scanLines: 16
   historyKeyframeSearchRadius: 10
   loopcorrect: false
   loopClosureEnableFlag: true
   useintensity: false
-  ridus_k: 1.5
+  ridus_k: 3
   cov_type: 1
   updatemethod: 0 #0:Ikfom 1:LSQ with IMU
   saveMap: true

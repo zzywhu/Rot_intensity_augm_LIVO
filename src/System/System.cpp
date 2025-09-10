@@ -6,15 +6,12 @@
 
 System::Config System::_config;
 
-void System::laserMapFovSegment()
-{
+void System::laserMapFovSegment() {
     _cubNeedrm.clear();
     V3D posLid = _stateIkfom.pos + _stateIkfom.rot.matrix() * _stateIkfom.offset_T_L_I; // twl=twi+Rwi*til=Twi*til
 
-    if (!_isLocalMapInitialized)
-    {
-        for (int i = 0; i < 3; i++)
-        {
+    if (!_isLocalMapInitialized) {
+        for (int i = 0; i < 3; i++) {
             _localMapPoints.vertex_min[i] = posLid(i) - _config._cubeLen / 2.0;
             _localMapPoints.vertex_max[i] = posLid(i) + _config._cubeLen / 2.0;
         }
@@ -23,12 +20,10 @@ void System::laserMapFovSegment()
     }
     float dist_to_map_edge[3][2];
     bool need_move = false;
-    for (int i = 0; i < 3; i++)
-    {
+    for (int i = 0; i < 3; i++) {
         dist_to_map_edge[i][0] = fabs(posLid(i) - _localMapPoints.vertex_min[i]);
         dist_to_map_edge[i][1] = fabs(posLid(i) - _localMapPoints.vertex_max[i]);
-        if (dist_to_map_edge[i][0] <= MOV_THRESHOLD * _config._detRange ||
-            dist_to_map_edge[i][1] <= MOV_THRESHOLD * _config._detRange)
+        if (dist_to_map_edge[i][0] <= MOV_THRESHOLD * _config._detRange || dist_to_map_edge[i][1] <= MOV_THRESHOLD * _config._detRange)
             need_move = true;
     }
     if (!need_move)
@@ -37,18 +32,14 @@ void System::laserMapFovSegment()
     newLocalMapPoints = _localMapPoints;
     float mov_dist = max((_config._cubeLen - 2.0 * MOV_THRESHOLD * _config._detRange) * 0.5 * 0.9,
                          double(_config._detRange * (MOV_THRESHOLD - 1)));
-    for (int i = 0; i < 3; i++)
-    {
+    for (int i = 0; i < 3; i++) {
         tmp_boxpoints = _localMapPoints;
-        if (dist_to_map_edge[i][0] <= MOV_THRESHOLD * _config._detRange)
-        {
+        if (dist_to_map_edge[i][0] <= MOV_THRESHOLD * _config._detRange) {
             newLocalMapPoints.vertex_max[i] -= mov_dist;
             newLocalMapPoints.vertex_min[i] -= mov_dist;
             tmp_boxpoints.vertex_min[i] = _localMapPoints.vertex_max[i] - mov_dist;
             _cubNeedrm.push_back(tmp_boxpoints);
-        }
-        else if (dist_to_map_edge[i][1] <= MOV_THRESHOLD * _config._detRange)
-        {
+        } else if (dist_to_map_edge[i][1] <= MOV_THRESHOLD * _config._detRange) {
             newLocalMapPoints.vertex_max[i] += mov_dist;
             newLocalMapPoints.vertex_min[i] += mov_dist;
             tmp_boxpoints.vertex_max[i] = _localMapPoints.vertex_min[i] + mov_dist;
@@ -57,29 +48,25 @@ void System::laserMapFovSegment()
     }
     _localMapPoints = newLocalMapPoints;
     double delete_begin = omp_get_wtime();
-    if (_cubNeedrm.size() > 0)
-    {
+    if (_cubNeedrm.size() > 0) {
         int kdtree_delete_counter = _ikdtree.Delete_Point_Boxes(_cubNeedrm);
-        if(kdtree_delete_counter)
-            std::cout<<"Kdtree delete size:"<<kdtree_delete_counter<<std::endl;
+        if (kdtree_delete_counter)
+            std::cout << "Kdtree delete size:" << kdtree_delete_counter << std::endl;
     }
 }
 
-bool System::collectRasterAngles(const double &begTime, const double &endTime)
-{
+bool System::collectRasterAngles(const double &begTime, const double &endTime) {
     if ((_motorAngleBuf.front().first > begTime && _measures.tMotorAngles.size() == 0) ||
         //_motorAngleBuf.front().first > endTime||
-        _motorAngleBuf.back().first < endTime)
-    {
+        _motorAngleBuf.back().first < endTime) {
+        //std::cout << _measures.tMotorAngles.size() << std::endl;
         printf("Not enough motor data\n");
         return false;
     }
 
-    if (_measures.tMotorAngles.size() > 0)
-    {
+    if (_measures.tMotorAngles.size() > 0) {
         auto itr = _measures.tMotorAngles.rbegin();
-        for (; itr != _measures.tMotorAngles.rend(); itr++)
-        {
+        for (; itr != _measures.tMotorAngles.rend(); itr++) {
             if (itr->first > begTime)
                 continue;
             break;
@@ -89,10 +76,9 @@ bool System::collectRasterAngles(const double &begTime, const double &endTime)
         _measures.tMotorAngles.push_back(tempMotorAngle);
     }
 
-    for (auto it = _motorAngleBuf.begin(); it != _motorAngleBuf.end(); ++it)
-    {
-//        if (it->first < begTime)
-//            continue;
+    for (auto it = _motorAngleBuf.begin(); it != _motorAngleBuf.end(); ++it) {
+        //        if (it->first < begTime)
+        //            continue;
         _measures.tMotorAngles.push_back(*it);
         if (it->first > endTime)
             break;
@@ -101,16 +87,13 @@ bool System::collectRasterAngles(const double &begTime, const double &endTime)
     return true;
 }
 
-bool System::getRasterAngle(const double &curTime)
-{
+bool System::getRasterAngle(const double &curTime) {
     double popAngle = 0;
     double popTime = 0;
-    if (curTime <= _motorAngleBuf.back().first)
-    {
+    if (curTime <= _motorAngleBuf.back().first) {
         popTime = _motorAngleBuf.front().first;
         popAngle = _motorAngleBuf.front().second;
-        while (_motorAngleBuf.front().first < curTime)
-        {
+        while (_motorAngleBuf.front().first < curTime) {
             popTime = _motorAngleBuf.front().first;
             popAngle = _motorAngleBuf.front().second;
             _motorAngleBuf.pop_front();
@@ -132,8 +115,7 @@ bool System::getRasterAngle(const double &curTime)
             _curMotorAngle -= 2 * M_PI;
         if (_initMotorAngle < 0)
             _initMotorAngle = _curMotorAngle;
-        if (!_config._isMotorInitialized)
-        {
+        if (!_config._isMotorInitialized) {
             Eigen::Matrix4d relTo = Eigen::Matrix4d::Identity();
             double rotAngle = _curMotorAngle - _initMotorAngle;
             if (rotAngle < 0)
@@ -145,19 +127,15 @@ bool System::getRasterAngle(const double &curTime)
             // relTo.block<3, 3>(0, 0) = AngleAxisToRotationMatrix(Eigen::Vector3d(0, 0, _curMotorAngle - _initMotorAngle)); // To1o2
             _relToList.push_back(relTo);
         }
-    }
-    else
-    {
+    } else {
         printf("No motor data\n");
         return false;
     }
     return true;
 }
 
-
 int System::matchKdTree(const PointCloudXYZI::Ptr &localCloudPtr, const PointCloudXYZI::Ptr &globalCloudPtr,
-                        KD_TREE &kdTree, MatchedInfoList &matches)
-{
+                        KD_TREE &kdTree, MatchedInfoList &matches) {
     assert(localCloudPtr->size() == globalCloudPtr->size());
     matches.clear();
     const int localCloudSize = localCloudPtr->size();
@@ -167,8 +145,7 @@ int System::matchKdTree(const PointCloudXYZI::Ptr &localCloudPtr, const PointClo
     //        omp_set_num_threads(MP_PROC_NUM);
     //        #pragma omp parallel for
     //    #endif
-    for (int i = 0; i < localCloudSize; i++)
-    {
+    for (int i = 0; i < localCloudSize; i++) {
         PointType &pointLocal = localCloudPtr->points[i];
         PointType &pointWorld = globalCloudPtr->points[i];
         vector<float> pointSearchSqDis(NUM_MATCH_POINTS);
@@ -177,21 +154,20 @@ int System::matchKdTree(const PointCloudXYZI::Ptr &localCloudPtr, const PointClo
         kdTree.Nearest_Search(pointWorld, NUM_MATCH_POINTS, pointsNear, pointSearchSqDis);
         if (pointsNear.size() < NUM_MATCH_POINTS || pointSearchSqDis[NUM_MATCH_POINTS - 1] > 5)
             continue;
-        VD(4) pabcd;
-        if (estiPlane(pabcd, pointsNear, 0.1))
-        {
+        VD(4)
+        pabcd;
+        if (estiPlane(pabcd, pointsNear, 0.1)) {
             float pd2 = pabcd(0) * pointWorld.x + pabcd(1) * pointWorld.y + pabcd(2) * pointWorld.z + pabcd(3);
 
             V3D pl(pointLocal.x, pointLocal.y, pointLocal.z);
             float s = 1. - 0.9 * fabs(pd2) / sqrt(pl.norm());
-            if (s > 0.9)
-            {
+            if (s > 0.9) {
                 // std::cout<<"pd2:"<<pd2<<std::endl;
                 Eigen::Vector4d planeParam;
                 planeParam << pabcd(0), pabcd(1), pabcd(2), pabcd(3);
                 totalResidual += abs(pd2);
                 V3D norm = V3D(pabcd(0), pabcd(1), pabcd(2));
-                matches.emplace_back(pl,pabcd, V3D(pointsNear[0].x, pointsNear[0].y, pointsNear[0].z), norm, 1 - 0.75 * fabs(pd2));
+                matches.emplace_back(pl, pabcd, V3D(pointsNear[0].x, pointsNear[0].y, pointsNear[0].z), norm, 1 - 0.75 * fabs(pd2));
             }
         }
     }
@@ -199,15 +175,13 @@ int System::matchKdTree(const PointCloudXYZI::Ptr &localCloudPtr, const PointClo
     return matches.size();
 }
 
-void System::motorMotionCompensation()
-{
+void System::motorMotionCompensation() {
     sort(_measures.lidar->begin(), _measures.lidar->end(), timeComprator);
     /*** undistort each lidar point (backward propagation) ***/
     double dt, curAngle, endAngle;
     auto it_pcl = _measures.lidar->points.end() - 1;
     endAngle = _measures.tMotorAngles.back().second;
-    for (auto it_kp = _measures.tMotorAngles.end() - 1; it_kp != _measures.tMotorAngles.begin(); it_kp--)
-    {
+    for (auto it_kp = _measures.tMotorAngles.end() - 1; it_kp != _measures.tMotorAngles.begin(); it_kp--) {
         auto head = it_kp - 1;
         auto tail = it_kp;
 
@@ -222,8 +196,7 @@ void System::motorMotionCompensation()
         double motorSpeed = deltaAngle / deltaTime;
 
         double offsetTime = head->first - _measures.lidar_beg_time;
-        for (; it_pcl->curvature / double(1000) > offsetTime; it_pcl--)
-        {
+        for (; it_pcl->curvature / double(1000) > offsetTime; it_pcl--) {
             dt = it_pcl->curvature / double(1000) - offsetTime;
             curAngle = motorSpeed * dt + head->second;
             if (it_pcl == _measures.lidar->points.end() - 1)
@@ -247,8 +220,7 @@ void System::motorMotionCompensation()
     }
 }
 
-void System::motorMotionCompensationZG()
-{
+void System::motorMotionCompensationZGforSIM() {
     sort(_measures.lidar->begin(), _measures.lidar->end(), timeComprator);
     /*** undistort each lidar point (backward propagation) ***/
     double dt, curAngle, endAngle;
@@ -257,8 +229,59 @@ void System::motorMotionCompensationZG()
 
     //std::ofstream fFrameOfs =std::ofstream(string(ROOT_DIR) + "PCD/"+std::to_string(_lidarBegTime)+".txt", std::ios::trunc | std::ios::in);
     //static std::ofstream fTotalOfs =std::ofstream(string(ROOT_DIR) + "PCD/all.txt", std::ios::trunc | std::ios::in);
-    for (auto it_kp = _measures.tMotorAngles.end() - 1; it_kp != _measures.tMotorAngles.begin(); it_kp--)
-    {
+    for (auto it_kp = _measures.tMotorAngles.end() - 1; it_kp != _measures.tMotorAngles.begin(); it_kp--) {
+        auto head = it_kp - 1;
+        auto tail = it_kp;
+
+        double deltaAngle = tail->second - head->second;
+        double deltaTime = tail->first - head->first;
+        if (deltaTime < 1e-9)
+            continue;
+        if (deltaAngle < -M_PI)
+            deltaAngle += 2 * M_PI;
+        else if (deltaAngle > M_PI)
+            deltaAngle -= 2 * M_PI;
+        double motorSpeed = deltaAngle / deltaTime;
+
+        double offsetTime = head->first - _measures.lidar_beg_time;
+        //std::cout<<"motor:"<<offsetTime<<"-"<<tail->first - _measures.lidar_beg_time<<std::endl;
+        std::cout << "angle:" << head->second << "-" << tail->second << std::endl;
+        for (; it_pcl->curvature / double(1000) > offsetTime; it_pcl--) {
+            dt = it_pcl->curvature / double(1000) - offsetTime;
+            curAngle = motorSpeed * dt + head->second;
+            //std::cout<<"lid:"<<it_pcl->curvature / double(1000) <<"->"<<curAngle<<std::endl;
+            Eigen::Matrix3d R;
+            Eigen::Vector3d t;
+            //_cloudAxisTransfer->CalculatePose(rad2deg(curAngle), R, t);
+            //_cloudAxisTransfer->getLid2IMUTrans(curAngle, R, t);
+            //std::cout << curAngle << std::endl;
+            _cloudAxisTransfer->getLid2IMUTransRefineforSIM(curAngle, R, t);
+            Eigen::Vector3d pOri(it_pcl->x, it_pcl->y, it_pcl->z);
+            Eigen::Vector3d pTrans = R * pOri + t;
+            it_pcl->x = pTrans(0);
+            it_pcl->y = pTrans(1);
+            it_pcl->z = pTrans(2);
+
+            //fFrameOfs<<std::fixed<<std::setprecision(8)<<pOri(0)<<","<<pOri(1)<<","<<pOri(2)<<","<<rad2deg(curAngle)<<std::endl;
+            //fTotalOfs<<std::fixed<<std::setprecision(8)<<pTrans(0)<<","<<pTrans(1)<<","<<pTrans(2)<<","<<rad2deg(curAngle)<<std::endl;
+            if (it_pcl == _measures.lidar->points.begin())
+                break;
+        }
+        if (it_pcl == _measures.lidar->points.begin())
+            break;
+    }
+}
+
+void System::motorMotionCompensationZG() {
+    sort(_measures.lidar->begin(), _measures.lidar->end(), timeComprator);
+    /*** undistort each lidar point (backward propagation) ***/
+    double dt, curAngle, endAngle;
+    auto it_pcl = _measures.lidar->points.end() - 1;
+    endAngle = _measures.tMotorAngles.back().second;
+
+    //std::ofstream fFrameOfs =std::ofstream(string(ROOT_DIR) + "PCD/"+std::to_string(_lidarBegTime)+".txt", std::ios::trunc | std::ios::in);
+    //static std::ofstream fTotalOfs =std::ofstream(string(ROOT_DIR) + "PCD/all.txt", std::ios::trunc | std::ios::in);
+    for (auto it_kp = _measures.tMotorAngles.end() - 1; it_kp != _measures.tMotorAngles.begin(); it_kp--) {
         auto head = it_kp - 1;
         auto tail = it_kp;
 
@@ -275,8 +298,7 @@ void System::motorMotionCompensationZG()
         double offsetTime = head->first - _measures.lidar_beg_time;
         //std::cout<<"motor:"<<offsetTime<<"-"<<tail->first - _measures.lidar_beg_time<<std::endl;
         //std::cout<<"angle:"<<head->second<<"-"<<tail->second<<std::endl;
-        for (; it_pcl->curvature / double(1000) > offsetTime; it_pcl--)
-        {
+        for (; it_pcl->curvature / double(1000) > offsetTime; it_pcl--) {
             dt = it_pcl->curvature / double(1000) - offsetTime;
             curAngle = motorSpeed * dt + head->second;
             //std::cout<<"lid:"<<it_pcl->curvature / double(1000) <<"->"<<curAngle<<std::endl;
@@ -313,8 +335,7 @@ bool System::lidarMotionCompensationWithTimestamp(typename pcl::PointCloud<Point
     double scanDuration;
     const int totalSize = cloudInOut->points.size();
     // get the first and last time stamp (stored as curvature) of this scan (time stamp unit: ms)
-    for (int i = 0; i < totalSize; i++)
-    {
+    for (int i = 0; i < totalSize; i++) {
         // LOG(INFO)<<cloudInOut->points[i].curvature;
         lastTimestamp = std::max(lastTimestamp, double(cloudInOut->points[i].curvature));
         firstTimestamp = std::min(firstTimestamp, double(cloudInOut->points[i].curvature));
@@ -326,8 +347,7 @@ bool System::lidarMotionCompensationWithTimestamp(typename pcl::PointCloud<Point
     Eigen::Quaterniond estimatedQuat12 = Eigen::Quaterniond(T12.block<3, 3>(0, 0));
     Eigen::Vector3d estimatedTranslation12 = T12.block<3, 1>(0, 3);
 
-    for (int i = 0; i < totalSize; i++)
-    {
+    for (int i = 0; i < totalSize; i++) {
         s = (cloudInOut->points[i].curvature - firstTimestamp) / scanDuration; // curvature as time stamp //TODO: fix
         // the first point (with earliest timestamp) would change the most
         // while the last point (with latest timestamp) would change the least
@@ -347,8 +367,7 @@ bool System::lidarMotionCompensationWithTimestamp(typename pcl::PointCloud<Point
     return true;
 }
 
-void System::predictAndUndistort(const MeasureGroup &meas, PointCloudXYZI::Ptr pclOut)
-{
+void System::predictAndUndistort(const MeasureGroup &meas, PointCloudXYZI::Ptr pclOut) {
     /*** sort point clouds by offset time ***/
     const double &pcl_beg_time = meas.lidar_beg_time;
     sort(pclOut->points.begin(), pclOut->points.end(), timeComprator);
@@ -363,20 +382,15 @@ void System::predictAndUndistort(const MeasureGroup &meas, PointCloudXYZI::Ptr p
     curTwl.block<3, 3>(0, 0) = _Rwl;
     curTwl.block<3, 1>(0, 3) = _twl;
 
-    if (_isFirstFrame)
-    {
+    if (_isFirstFrame) {
         _dt = 0.1;
         _isFirstFrame = false;
         _timeLastScan = pcl_beg_time;
-    }
-    else
-    {
-        if (_dt != 0)
-        {
+    } else {
+        if (_dt != 0) {
             deltaT21 = curTwl.inverse() * _prevTwl; // T21=T2w*Tw1
             velocity = deltaT21 / _dt;
-        }
-        else
+        } else
             return;
         _dt = pcl_beg_time - _timeLastScan;
         _timeLastScan = pcl_beg_time;
@@ -389,8 +403,7 @@ void System::predictAndUndistort(const MeasureGroup &meas, PointCloudXYZI::Ptr p
     Eigen::Vector3d estimatedTranslation21 = deltaT21.block<3, 1>(0, 3);
     /**CV model： un-distort pcl using linear interpolation **/
     auto itrPt = pclOut->points.end() - 1;
-    for (; itrPt != pclOut->points.begin(); itrPt--)
-    {
+    for (; itrPt != pclOut->points.begin(); itrPt--) {
         double s = (endOffsetTime - itrPt->curvature / double(1000)) / _dt; // curvature as time stamp //TODO: fix
         // the first point (with earliest timestamp) would change the most
         // while the last point (with latest timestamp) would change the least
@@ -409,27 +422,22 @@ void System::predictAndUndistort(const MeasureGroup &meas, PointCloudXYZI::Ptr p
     _twl = predictTwl.block<3, 1>(0, 3);
 }
 
-void System::initKdTreeMap(PointVector pointCloud)
-{
-    if(!_ikdtree.Root_Node)
-    {
+void System::initKdTreeMap(PointVector pointCloud) {
+    if (!_ikdtree.Root_Node) {
         _ikdtree.Build(pointCloud); // pw
         int featsFromMapNum = _ikdtree.validnum();
         //cout << "[ Init Kdtree ]:  Map num: " << featsFromMapNum << endl;
     }
 }
 
-void System::updateKdTreeMap(PointVector &pointsIn)
-{
+void System::updateKdTreeMap(PointVector &pointsIn) {
     PointVector pointToAdd;
     PointVector pointNoNeedDownsample;
     const int &ptSize = pointsIn.size();
     pointToAdd.reserve(ptSize);
     pointNoNeedDownsample.reserve(ptSize);
-    for (int i = 0; i < ptSize; i++)
-    {
-        if (!_nearestPoints[i].empty() && _isEKFInited)
-        {
+    for (int i = 0; i < ptSize; i++) {
+        if (!_nearestPoints[i].empty() && _isEKFInited) {
             const PointVector &points_near = _nearestPoints[i];
             bool need_add = true;
             PointType downsample_result, mid_point;
@@ -437,27 +445,21 @@ void System::updateKdTreeMap(PointVector &pointsIn)
             mid_point.y = floor(pointsIn[i].y / _config._filterSizeMap) * _config._filterSizeMap + 0.5 * _config._filterSizeMap;
             mid_point.z = floor(pointsIn[i].z / _config._filterSizeMap) * _config._filterSizeMap + 0.5 * _config._filterSizeMap;
             float dist = calcDist(pointsIn[i], mid_point);
-            if (fabs(points_near[0].x - mid_point.x) > 0.5 * _config._filterSizeMap &&
-                fabs(points_near[0].y - mid_point.y) > 0.5 * _config._filterSizeMap &&
-                fabs(points_near[0].z - mid_point.z) > 0.5 * _config._filterSizeMap)
-            {
+            if (fabs(points_near[0].x - mid_point.x) > 0.5 * _config._filterSizeMap && fabs(points_near[0].y - mid_point.y) > 0.5 * _config._filterSizeMap && fabs(points_near[0].z - mid_point.z) > 0.5 * _config._filterSizeMap) {
                 pointNoNeedDownsample.push_back(pointsIn[i]);
                 continue;
             }
-            for (int readd_i = 0; readd_i < NUM_MATCH_POINTS; readd_i++)
-            {
+            for (int readd_i = 0; readd_i < NUM_MATCH_POINTS; readd_i++) {
                 if (points_near.size() < NUM_MATCH_POINTS)
                     break;
-                if (calcDist(points_near[readd_i], mid_point) < dist)
-                {
+                if (calcDist(points_near[readd_i], mid_point) < dist) {
                     need_add = false;
                     break;
                 }
             }
             if (need_add)
                 pointToAdd.push_back(pointsIn[i]);
-        }
-        else
+        } else
             pointToAdd.push_back(pointsIn[i]);
     }
 
@@ -465,62 +467,52 @@ void System::updateKdTreeMap(PointVector &pointsIn)
     PointVector pointAdded2 = _ikdtree.Add_Points(pointNoNeedDownsample, false);
 
     PointVector().swap(_addedPoints);
-    _addedPoints.insert(_addedPoints.end(),pointAdded1.begin(),pointAdded1.end());
-    _addedPoints.insert(_addedPoints.end(),pointAdded2.begin(),pointAdded2.end());
+    _addedPoints.insert(_addedPoints.end(), pointAdded1.begin(), pointAdded1.end());
+    _addedPoints.insert(_addedPoints.end(), pointAdded2.begin(), pointAdded2.end());
 
     std::cout << "Map added points: " << _addedPoints.size() << std::endl;
 }
 
-void System::initVoxelMapWithKdtree(PointVector pointCloud)
-{
+void System::initVoxelMapWithKdtree(PointVector pointCloud) {
     _ikdtree.Build(pointCloud); // pw
     int featsFromMapNum = _ikdtree.validnum();
     cout << "[ Init Kdtree ]:  Map num: " << featsFromMapNum << endl;
     _voxelMapGaussian->updateVoxelMap(pointCloud);
 }
 
-void System::updateVoxelMapWithKdtree(PointVector &pointsIn)
-{
+void System::updateVoxelMapWithKdtree(PointVector &pointsIn) {
     PointVector pointToAdd;
     PointVector pointNoNeedDownsample;
     const int &ptSize = pointsIn.size();
     pointToAdd.reserve(ptSize);
     pointNoNeedDownsample.reserve(ptSize);
     _nearestPoints.resize(ptSize);
-    for (int i = 0; i < ptSize; i++)
-    {
+    for (int i = 0; i < ptSize; i++) {
         vector<float> pointSearchSqDis(NUM_MATCH_POINTS);
         PointVector &pointsNear = _nearestPoints[i];
         _ikdtree.Nearest_Search(pointsIn[i], NUM_MATCH_POINTS, pointsNear, pointSearchSqDis);
-        if (!pointsNear.empty())
-        {
+        if (!pointsNear.empty()) {
             bool need_add = true;
             PointType downsample_result, mid_point;
             mid_point.x = floor(pointsIn[i].x / _config._filterSizeMap) * _config._filterSizeMap + 0.5 * _config._filterSizeMap;
             mid_point.y = floor(pointsIn[i].y / _config._filterSizeMap) * _config._filterSizeMap + 0.5 * _config._filterSizeMap;
             mid_point.z = floor(pointsIn[i].z / _config._filterSizeMap) * _config._filterSizeMap + 0.5 * _config._filterSizeMap;
             float dist = calcDist(pointsIn[i], mid_point);
-            if (fabs(pointsNear[0].x - mid_point.x) > 0.5 * _config._filterSizeMap &&
-                fabs(pointsNear[0].y - mid_point.y) > 0.5 * _config._filterSizeMap &&
-                fabs(pointsNear[0].z - mid_point.z) > 0.5 * _config._filterSizeMap)
-            {
+            if (fabs(pointsNear[0].x - mid_point.x) > 0.5 * _config._filterSizeMap && fabs(pointsNear[0].y - mid_point.y) > 0.5 * _config._filterSizeMap && fabs(pointsNear[0].z - mid_point.z) > 0.5 * _config._filterSizeMap) {
                 pointNoNeedDownsample.push_back(pointsIn[i]);
                 continue;
             }
-            for (int readd_i = 0; readd_i < NUM_MATCH_POINTS; readd_i++)
-            {
+            for (int readd_i = 0; readd_i < NUM_MATCH_POINTS; readd_i++) {
                 if (pointsNear.size() < NUM_MATCH_POINTS)
                     break;
-                if (calcDist(pointsNear[readd_i], mid_point) < dist)
-                {
+                if (calcDist(pointsNear[readd_i], mid_point) < dist) {
                     need_add = false;
                     break;
                 }
             }
             if (need_add)
                 pointToAdd.push_back(pointsIn[i]);
-        }
-        else
+        } else
             pointToAdd.push_back(pointsIn[i]);
     }
 
@@ -530,23 +522,21 @@ void System::updateVoxelMapWithKdtree(PointVector &pointsIn)
     _voxelMapGaussian->updateVoxelMap(pointAdded2);
 
     PointVector().swap(_addedPoints);
-    _addedPoints.insert(_addedPoints.end(),pointAdded1.begin(),pointAdded1.end());
-    _addedPoints.insert(_addedPoints.end(),pointAdded2.begin(),pointAdded2.end());
+    _addedPoints.insert(_addedPoints.end(), pointAdded1.begin(), pointAdded1.end());
+    _addedPoints.insert(_addedPoints.end(), pointAdded2.begin(), pointAdded2.end());
 
     // int nNew = _addedPoints.size();
     // std::cout << "Map added points: " << nNew << std::endl;
 }
 
-void System::initVoxelMap()
-{
-    _Rwl = _stateIkfom.rot * _stateIkfom.offset_R_L_I;                     // Rwl=Rwi*Ril
+void System::initVoxelMap() {
+    _Rwl = _stateIkfom.rot * _stateIkfom.offset_R_L_I;                            // Rwl=Rwi*Ril
     _twl = _stateIkfom.rot * _stateIkfom.offset_T_L_I.matrix() + _stateIkfom.pos; // twl=Twi*til
     //PointCloudXYZI::Ptr globalSurfCloudPtr(new PointCloudXYZI());
     //transCloud(_localSurfCloudPtr, globalSurfCloudPtr, _Rwl, _twl);
 
     _curSurfPvList.clear();
-    for (size_t i = 0; i < _localSurfCloudPtr->size(); i++)
-    {
+    for (size_t i = 0; i < _localSurfCloudPtr->size(); i++) {
         PointWithCov pv;
         pv.featType = Plane;
         pv.pl << _localSurfCloudPtr->points[i].x, _localSurfCloudPtr->points[i].y, _localSurfCloudPtr->points[i].z;
@@ -560,18 +550,13 @@ void System::initVoxelMap()
     if (_config._covType == 2)
         calcPointNeighCov(_curSurfPvList, 20);
 
-    for (size_t i = 0; i < _localSurfCloudPtr->size(); i++)
-    {
-        if (_config._covType == 1)
-        {
+    for (size_t i = 0; i < _localSurfCloudPtr->size(); i++) {
+        if (_config._covType == 1) {
             calcBodyCov(_curSurfPvList[i], _config._rangingCov, _config._angleCov);
             M3D pointCrossmat;
             pointCrossmat << SKEW_SYM_MATRX(_curSurfPvList[i].pl);
-            _curSurfPvList[i].obsCov = _Rwl * _curSurfPvList[i].bodyCov * _Rwl.transpose() +
-                                       _Rwl * pointCrossmat * _kf.get_P().block<3, 3>(3, 3) * pointCrossmat.transpose() * _Rwl.transpose() +
-                                       _kf.get_P().block<3, 3>(0, 0);
-        }
-        else if (_config._covType == 2)
+            _curSurfPvList[i].obsCov = _Rwl * _curSurfPvList[i].bodyCov * _Rwl.transpose() + _Rwl * pointCrossmat * _kf.get_P().block<3, 3>(3, 3) * pointCrossmat.transpose() * _Rwl.transpose() + _kf.get_P().block<3, 3>(0, 0);
+        } else if (_config._covType == 2)
             _curSurfPvList[i].obsCov = _curSurfPvList[i].neighCov.block<3, 3>(0, 0);
     }
     TicToc time1;
@@ -583,44 +568,35 @@ void System::initVoxelMap()
     //printf("Init buildVoxelMap time: %f ms\n", time1.toc());
 }
 
-void System::updateVoxelMap()
-{
+void System::updateVoxelMap() {
     //////////////update voxel map//////////////
-    for (size_t i = 0; i < _curSurfPvList.size(); i++)
-    {
+    for (size_t i = 0; i < _curSurfPvList.size(); i++) {
         _curSurfPvList[i].pi = _stateIkfom.offset_R_L_I * _curSurfPvList[i].pl + _stateIkfom.offset_T_L_I;
         if (_curSurfPvList[i].pi[2] == 0)
             _curSurfPvList[i].pi[2] = 0.001;
         _curSurfPvList[i].pw = _stateIkfom.rot * _curSurfPvList[i].pi + _stateIkfom.pos;
-        if (_config._covType == 1)
-        {
+        if (_config._covType == 1) {
             M3D pointCrossmat;
             pointCrossmat << SKEW_SYM_MATRX(_curSurfPvList[i].pl);
             calcBodyCov(_curSurfPvList[i], _config._rangingCov, _config._angleCov);
-            _curSurfPvList[i].obsCov = _Rwl * _curSurfPvList[i].bodyCov * _Rwl.transpose() +
-                                       _Rwl * pointCrossmat * _kf.get_P().block<3, 3>(3, 3) * pointCrossmat.transpose() * _Rwl.transpose() +
-                                       _kf.get_P().block<3, 3>(0, 0);
-        }
-        else if (_config._covType == 2)
+            _curSurfPvList[i].obsCov = _Rwl * _curSurfPvList[i].bodyCov * _Rwl.transpose() + _Rwl * pointCrossmat * _kf.get_P().block<3, 3>(3, 3) * pointCrossmat.transpose() * _Rwl.transpose() + _kf.get_P().block<3, 3>(0, 0);
+        } else if (_config._covType == 2)
             _curSurfPvList[i].obsCov = _curSurfPvList[i].neighCov.block<3, 3>(0, 0);
     }
     std::sort(_curSurfPvList.begin(), _curSurfPvList.end(), varContrast);
-//	TicToc time1;
+    //	TicToc time1;
     ::updateVoxelMap(_curSurfPvList, _frameId, _config._voxelLength, _config._maxLayers, _config._layerPointSizeList,
                      _config._maxPointsSize, _config._maxPointsSize, _config._minSurfEigenValue,
                      _voxelSurfMap, _boxToDel);
-//	printf("updateVoxelMap time: %f ms\n", time1.toc());
+    //	printf("updateVoxelMap time: %f ms\n", time1.toc());
 }
 
-bool System::motionCheck()
-{
-    if (_rotDeltas[0] > 0.1 && _posDeltas[0] > 0.1)
-    {
+bool System::motionCheck() {
+    if (_rotDeltas[0] > 0.1 && _posDeltas[0] > 0.1) {
         int nIncreased = 0;
         int nLarge = 0;
         const int size = _rotDeltas.size();
-        for (int i = 1; i < size; i++)
-        {
+        for (int i = 1; i < size; i++) {
             if (_rotDeltas[i] > _rotDeltas[0] || _posDeltas[i] > _posDeltas[0])
                 nIncreased++;
             if (_rotDeltas[i] > 1. || _posDeltas[i] > 1.)
@@ -632,17 +608,14 @@ bool System::motionCheck()
                 return true;
     }
     double matchRatio = (float)_matchSurfSizeList.back() / _localSurfCloudDownPtr->size();
-    if ((float)matchRatio < 0.2)
-    {
+    if ((float)matchRatio < 0.2) {
         std::cerr << "Matches ratio too little: " << matchRatio << std::endl;
         return false;
     }
 
-    for (int i = 1; i < _matchSurfSizeList.size(); i++)
-    {
+    for (int i = 1; i < _matchSurfSizeList.size(); i++) {
         int deltaSize = _matchSurfSizeList[i] - _matchSurfSizeList[i - 1];
-        if (deltaSize < -0.2 * _cloudSurfDownSize)
-        {
+        if (deltaSize < -0.2 * _cloudSurfDownSize) {
             std::cerr << "Matches decreased: " << deltaSize << std::endl;
             return true;
         }
@@ -650,47 +623,46 @@ bool System::motionCheck()
     return true;
 }
 
-void System::motorInitialize()
-{
-//    {
-//        // undistort and predict by Tol guessed
-//        Eigen::Matrix3d Rol;
-//        Rol<<-0.999995, -0.003316, -0.000012,
-//             -0.000000 , 0.003665 ,-0.999993,
-//        0.003316 ,-0.999988 ,-0.003665;
-//        Eigen::Vector3d tol=Eigen::Vector3d::Zero();
-//        transCloudInMotorAxis(_measures.lidar, _measures.lidar, 0, Rol, tol);
-//        motorMotionCompensation();
-//        //transCloudInMotorAxis(_measures.lidar, _measures.lidar, _curMotorAngle, Eigen::Matrix3d::Identity(), Eigen::Vector3d::Zero());
-//
-//        Eigen::Matrix3d Rlo=Rol.transpose();
-//        Eigen::Vector3d tlo=-Rlo*tol;
-//        transCloudInMotorAxis(_measures.lidar,_measures.lidar, 0, Rlo, tlo);
-//
-//        //GuessT=Tll(theta0,theta)=Tlo*Too(theta0,theta)*Tol
-//        Eigen::Matrix4d Tol=Eigen::Matrix4d::Identity();
-//        Tol.block<3,3>(0,0)=Rol;
-//        Tol.block<3,1>(0,3)=tol;
-//        Eigen::Matrix4d Tlo=Eigen::Matrix4d::Identity();
-//        Tlo.block<3,3>(0,0)=Rlo;
-//        Tlo.block<3,1>(0,3)=tlo;
-//        Eigen::Matrix4d Too=Eigen::Matrix4d::Identity();
-//        double rotAngle=_curMotorAngle - _initMotorAngle;
-//        if (rotAngle < 0)
-//            rotAngle += 2 * M_PI;
-//
-//        Eigen::Matrix3d Roo=AngleAxisToRotationMatrix(Eigen::Vector3d(0,0,rotAngle));
-//        Too.block<3,3>(0,0)=Roo;
-//
-//        Eigen::Matrix4d guessT=Tlo*Too*Tol;
-//        _Rwl=guessT.block<3,3>(0,0);
-//        _twl=guessT.block<3,1>(0,3);
-//        _stateCur.pos_end = -_Rwl* _stateCur.offset_R_L_I.transpose() * _stateCur.offset_T_L_I +_twl; // twi=-Rwl*Rli*til+twl=Twl*tli
-//        _stateCur.rot_end = _Rwl * _stateCur.offset_R_L_I.transpose();//Rwi=Rwl*Rli
-//    }
+void System::motorInitialize() {
+    //    {
+    //        // undistort and predict by Tol guessed
+    //        Eigen::Matrix3d Rol;
+    //        Rol<<-0.999995, -0.003316, -0.000012,
+    //             -0.000000 , 0.003665 ,-0.999993,
+    //        0.003316 ,-0.999988 ,-0.003665;
+    //        Eigen::Vector3d tol=Eigen::Vector3d::Zero();
+    //        transCloudInMotorAxis(_measures.lidar, _measures.lidar, 0, Rol, tol);
+    //        motorMotionCompensation();
+    //        //transCloudInMotorAxis(_measures.lidar, _measures.lidar, _curMotorAngle, Eigen::Matrix3d::Identity(), Eigen::Vector3d::Zero());
+    //
+    //        Eigen::Matrix3d Rlo=Rol.transpose();
+    //        Eigen::Vector3d tlo=-Rlo*tol;
+    //        transCloudInMotorAxis(_measures.lidar,_measures.lidar, 0, Rlo, tlo);
+    //
+    //        //GuessT=Tll(theta0,theta)=Tlo*Too(theta0,theta)*Tol
+    //        Eigen::Matrix4d Tol=Eigen::Matrix4d::Identity();
+    //        Tol.block<3,3>(0,0)=Rol;
+    //        Tol.block<3,1>(0,3)=tol;
+    //        Eigen::Matrix4d Tlo=Eigen::Matrix4d::Identity();
+    //        Tlo.block<3,3>(0,0)=Rlo;
+    //        Tlo.block<3,1>(0,3)=tlo;
+    //        Eigen::Matrix4d Too=Eigen::Matrix4d::Identity();
+    //        double rotAngle=_curMotorAngle - _initMotorAngle;
+    //        if (rotAngle < 0)
+    //            rotAngle += 2 * M_PI;
+    //
+    //        Eigen::Matrix3d Roo=AngleAxisToRotationMatrix(Eigen::Vector3d(0,0,rotAngle));
+    //        Too.block<3,3>(0,0)=Roo;
+    //
+    //        Eigen::Matrix4d guessT=Tlo*Too*Tol;
+    //        _Rwl=guessT.block<3,3>(0,0);
+    //        _twl=guessT.block<3,1>(0,3);
+    //        _stateCur.pos_end = -_Rwl* _stateCur.offset_R_L_I.transpose() * _stateCur.offset_T_L_I +_twl; // twi=-Rwl*Rli*til+twl=Twl*tli
+    //        _stateCur.rot_end = _Rwl * _stateCur.offset_R_L_I.transpose();//Rwi=Rwl*Rli
+    //    }
 
     *_localCloudPtr = *_measures.lidar;
-    if(processCloudLSQ(_regPCL_VGICP)<=0)
+    if (processCloudLSQ(_regPCL_VGICP) <= 0)
         return;
 
     if (_relToList.empty())
@@ -703,8 +675,7 @@ void System::motorInitialize()
     std::cout << "Lidar R: " << R2ypr(_Rwl).transpose() << std::endl;
     std::cout << "Lidar t: " << _twl.transpose() << std::endl;
     // TicToc calcTime;
-    if (calcEXRotation(_relToList, _relTlList, _Rol, _tol, 10, _config._maxInierError))
-    {
+    if (calcEXRotation(_relToList, _relTlList, _Rol, _tol, 10, _config._maxInierError)) {
         _tol = Eigen::Vector3d();
         std::ofstream extrinsicOfs = std::ofstream(string(ROOT_DIR) + "result/MotorExtrinsic", std::ios::trunc | std::ios::in);
         extrinsicOfs << std::fixed << std::setprecision(6) << _tol.x() << "," << _tol.y() << "," << _tol.z() << std::endl;
@@ -719,38 +690,34 @@ void System::motorInitialize()
     // printf("calculate Tol time: %f ms\n\n", calcTime.toc());
 }
 
-void System::loopClosing(state_ikfom& state)
-{
-    if (_config._isLoopEn && _config._isImuInitialized)
-    {
+void System::loopClosing(state_ikfom &state) {
+    if (_config._isLoopEn && _config._isImuInitialized) {
         //store Til
-        Eigen::Matrix4d Til=Eigen::Matrix4d::Identity();
-        Til.block<3,3>(0,0)=state.offset_R_L_I.matrix();
-        Til.block<3,1>(0,3)=state.offset_T_L_I;
+        Eigen::Matrix4d Til = Eigen::Matrix4d::Identity();
+        Til.block<3, 3>(0, 0) = state.offset_R_L_I.matrix();
+        Til.block<3, 1>(0, 3) = state.offset_T_L_I;
         //std::cout<<Til<<std::endl;
         _TilList.emplace_back(Til);
         //Convert into GNSS coordinate (pg=Tgi*Til*pl)
-        PointCloudXYZI::Ptr localCloudPtr(new PointCloudXYZI()),localCloudDownPtr(new PointCloudXYZI());
-        _Rwg = state.rot.matrix()*_Rig;//Rwg=Rwi*Rig
-        _twg = state.rot.matrix()*_tig+state.pos;//twg
+        PointCloudXYZI::Ptr localCloudPtr(new PointCloudXYZI()), localCloudDownPtr(new PointCloudXYZI());
+        _Rwg = state.rot.matrix() * _Rig;             //Rwg=Rwi*Rig
+        _twg = state.rot.matrix() * _tig + state.pos; //twg
         Eigen::Matrix3d Rgi = _Rig.inverse();
-        Eigen::Vector3d tgi = -_Rig.inverse()*_tig;
-        Eigen::Matrix3d Rgl=Rgi*state.offset_R_L_I.matrix();//Rgl=Rgi*Ril
-        Eigen::Vector3d tgl=Rgi*state.offset_T_L_I.matrix()+tgi;//Tgi*til
+        Eigen::Vector3d tgi = -_Rig.inverse() * _tig;
+        Eigen::Matrix3d Rgl = Rgi * state.offset_R_L_I.matrix();       //Rgl=Rgi*Ril
+        Eigen::Vector3d tgl = Rgi * state.offset_T_L_I.matrix() + tgi; //Tgi*til
         transCloud(_localCloudPtr, localCloudPtr, Rgl, tgl);
         transCloud(_localCloudDownPtr, localCloudDownPtr, Rgl, tgl);
 
         std::vector<PointWithCov> curPvList;
-        for(auto pv:_curSurfPvList)
-        {
-            pv.pi=Rgi*pv.pi+tgi;
+        for (auto pv : _curSurfPvList) {
+            pv.pi = Rgi * pv.pi + tgi;
             curPvList.emplace_back(pv);
         }
 
-        if(_measures.gnss)
-        { // input gnss info into loopclosing thread
+        if (_measures.gnss) { // input gnss info into loopclosing thread
             processGNSS();
-            _measures.gnss= nullptr;
+            _measures.gnss = nullptr;
         }
         // input frame info into loopclosing thread
         _loopCloser->getProcessLock().lock();
@@ -766,42 +733,38 @@ void System::loopClosing(state_ikfom& state)
         // Update frontend state
         updateLoopStatus(state);
         _imuProcessor->_imuDatas.clear();
-//        if(_loopCloser->loopCount()>0)
-//            PAUSE;
+        //        if(_loopCloser->loopCount()>0)
+        //            PAUSE;
     }
 }
 
-void System::loopClosing(StatesGroup& state)
-{
-    if (_config._isLoopEn && _config._isImuInitialized)
-    {
+void System::loopClosing(StatesGroup &state) {
+    if (_config._isLoopEn && _config._isImuInitialized) {
         //store Til
-        Eigen::Matrix4d Til=Eigen::Matrix4d::Identity();
-        Til.block<3,3>(0,0)=state.offset_R_L_I.matrix();
-        Til.block<3,1>(0,3)=state.offset_T_L_I;
+        Eigen::Matrix4d Til = Eigen::Matrix4d::Identity();
+        Til.block<3, 3>(0, 0) = state.offset_R_L_I.matrix();
+        Til.block<3, 1>(0, 3) = state.offset_T_L_I;
         _TilList.emplace_back(Til);
 
         //Convert into GNSS coordinate (pg=Tgi*Til*pl)
-        PointCloudXYZI::Ptr localCloudPtr(new PointCloudXYZI()),localCloudDownPtr(new PointCloudXYZI());
+        PointCloudXYZI::Ptr localCloudPtr(new PointCloudXYZI()), localCloudDownPtr(new PointCloudXYZI());
 
-        _Rwg = state.rot_end.matrix()*_Rig;//Rwg=Rwi*Rig
-        _twg = state.rot_end.matrix()*_tig+state.pos_end;//twg
+        _Rwg = state.rot_end.matrix() * _Rig;                 //Rwg=Rwi*Rig
+        _twg = state.rot_end.matrix() * _tig + state.pos_end; //twg
         Eigen::Matrix3d Rgi = _Rig.inverse();
-        Eigen::Vector3d tgi = -_Rig.inverse()*_tig;
-        Eigen::Matrix3d Rgl=Rgi*state.offset_R_L_I.matrix();//Rgl=Rgi*Ril
-        Eigen::Vector3d tgl=Rgi*state.offset_T_L_I.matrix()+tgi;//Tgi*til
+        Eigen::Vector3d tgi = -_Rig.inverse() * _tig;
+        Eigen::Matrix3d Rgl = Rgi * state.offset_R_L_I.matrix();       //Rgl=Rgi*Ril
+        Eigen::Vector3d tgl = Rgi * state.offset_T_L_I.matrix() + tgi; //Tgi*til
         transCloud(_localCloudPtr, localCloudPtr, Rgl, tgl);
         transCloud(_localCloudDownPtr, localCloudDownPtr, Rgl, tgl);
         std::vector<PointWithCov> curPvList;
-        for(auto pv:_curSurfPvList)
-        {
-            pv.pi=Rgi*pv.pi+tgi;
+        for (auto pv : _curSurfPvList) {
+            pv.pi = Rgi * pv.pi + tgi;
             curPvList.emplace_back(pv);
         }
-        if(_measures.gnss)
-        { // input gnss info into loopclosing thread
+        if (_measures.gnss) { // input gnss info into loopclosing thread
             processGNSS();
-            _measures.gnss= nullptr;
+            _measures.gnss = nullptr;
         }
 
         // input frame info into loopclosing thread\
@@ -818,24 +781,21 @@ void System::loopClosing(StatesGroup& state)
         // Update frontend state
         updateLoopStatus(state);
         _imuProcessor->_imuDatas.clear();
-//        if(_loopCloser->loopCount()>0)
-//            PAUSE;
+        //        if(_loopCloser->loopCount()>0)
+        //            PAUSE;
     }
 }
 
-void System::updateFrontendMap()
-{
+void System::updateFrontendMap() {
     std::vector<PointWithCov> totalSurfPvList;
     // Correct new frames pushed in loopclosing thread
-    for (auto &frameBlock : _loopCloser->getFrameBuffer())
-    {
+    for (auto &frameBlock : _loopCloser->getFrameBuffer()) {
         if (frameBlock->_uniqueId <= _loopCloser->lastCorrectBlockID())
             continue;
-      //  std::cout << "Frontend correct buffer block id:" << frameBlock->_uniqueId << std::endl;
+        //  std::cout << "Frontend correct buffer block id:" << frameBlock->_uniqueId << std::endl;
         frameBlock->_poseLo = _loopCloser->getLoopTrans() * frameBlock->_poseLo; // Tw2'=Tw1'*T1'2'
 
-        for (auto &pv : frameBlock->_pvList)
-        {
+        for (auto &pv : frameBlock->_pvList) {
             pv.pw = frameBlock->_poseLo.block<3, 3>(0, 0) * pv.pi + frameBlock->_poseLo.block<3, 1>(0, 3);
             totalSurfPvList.emplace_back(pv);
         }
@@ -846,65 +806,60 @@ void System::updateFrontendMap()
                          _config._maxPointsSize, _config._maxCovPointsSize, _config._minSurfEigenValue,
                          _loopCloser->getVoxelSurfMap(), _boxToDel);
 
-    if (!_voxelSurfMap.empty())
-    {
+    if (!_voxelSurfMap.empty()) {
         TicToc time;
         std::cout << "voxel surf map size before loop closing: " << _voxelSurfMap.size() << std::endl;
-        for (auto locOctItr:_voxelSurfMap)
+        for (auto locOctItr : _voxelSurfMap)
             delete locOctItr.second;
         _voxelSurfMap.clear();
         _voxelSurfMap = _loopCloser->getVoxelSurfMap();
-       // std::cout << "voxel surf map size after loop closing: " << _voxelSurfMap.size() << std::endl;
-       // printf("Delete old voxel map time: %f ms\n", time.toc());
-       // std::cout << "Voxel map updated by loop closing" << std::endl;
+        // std::cout << "voxel surf map size after loop closing: " << _voxelSurfMap.size() << std::endl;
+        // printf("Delete old voxel map time: %f ms\n", time.toc());
+        // std::cout << "Voxel map updated by loop closing" << std::endl;
     }
 
     _dispMutex.lock();
-    if(_ikdtree.Root_Node)
-    {
+    if (_ikdtree.Root_Node) {
         TicToc time;
         //update traj in viewer
         _trajPts->clear();
         _trajPropagatPts->clear();
         Eigen::Matrix4d gravAlignMat = Eigen::Matrix4d::Identity();
-        gravAlignMat.block<3,3>(0,0) = _rotAlign;
+        gravAlignMat.block<3, 3>(0, 0) = _rotAlign;
         Eigen::Matrix4d Tgi = Eigen::Matrix4d::Identity();
-        Tgi.block<3,3>(0,0)=_Rig.inverse();
-        Tgi.block<3,1>(0,3)=-_Rig.inverse()*_tig;
-        for(auto block:_loopCloser->getFrameBlocks())
-        {
-            Eigen::Matrix4d Twi=block->_poseLo*Tgi;
+        Tgi.block<3, 3>(0, 0) = _Rig.inverse();
+        Tgi.block<3, 1>(0, 3) = -_Rig.inverse() * _tig;
+        for (auto block : _loopCloser->getFrameBlocks()) {
+            Eigen::Matrix4d Twi = block->_poseLo * Tgi;
             PointType pt;
-            pt.x=Twi(0,3);
-            pt.y=Twi(1,3);
-            pt.z=Twi(2,3);
-            _trajPts->push_back(pt);//twi
+            pt.x = Twi(0, 3);
+            pt.y = Twi(1, 3);
+            pt.z = Twi(2, 3);
+            _trajPts->push_back(pt); //twi
         }
         pcl::transformPointCloud(*_trajPts, *_trajPts, gravAlignMat);
 
         // update ikdtree
-       // std::cout<<"updating kdtree map on "<<LoopCloser::config()._frontendWinSize<<" frames"<<std::endl;
-        const int& blockSize=_loopCloser->getFrameBlocks().size();
-        int localBlockSize=LoopCloser::config()._frontendWinSize;
-        if(localBlockSize<0)
-            localBlockSize=blockSize;
+        // std::cout<<"updating kdtree map on "<<LoopCloser::config()._frontendWinSize<<" frames"<<std::endl;
+        const int &blockSize = _loopCloser->getFrameBlocks().size();
+        int localBlockSize = LoopCloser::config()._frontendWinSize;
+        if (localBlockSize < 0)
+            localBlockSize = blockSize;
 
-        int startIdx=std::max(0,blockSize -localBlockSize);
-        for(int i = startIdx; i<blockSize; i++)
-        {//add frames cloud after pgo
-            auto block=_loopCloser->getFrameBlock(i);
+        int startIdx = std::max(0, blockSize - localBlockSize);
+        for (int i = startIdx; i < blockSize; i++) { //add frames cloud after pgo
+            auto block = _loopCloser->getFrameBlock(i);
             PointCloudXYZI::Ptr globalPcDown(new PointCloudXYZI());
             pcl::transformPointCloud(*block->_pcDown, *globalPcDown, block->_poseLo);
-            if(i == startIdx)
+            if (i == startIdx)
                 _ikdtree.Build(globalPcDown->points);
             else
-                _ikdtree.Add_Points(globalPcDown->points,true);
+                _ikdtree.Add_Points(globalPcDown->points, true);
         }
-        for (auto &block : _loopCloser->getFrameBuffer())
-        {//add buffer frame cloud in loopclosing thread
+        for (auto &block : _loopCloser->getFrameBuffer()) { //add buffer frame cloud in loopclosing thread
             PointCloudXYZI::Ptr globalPcDown(new PointCloudXYZI());
             pcl::transformPointCloud(*block->_pcDown, *globalPcDown, block->_poseLo);
-            _ikdtree.Add_Points(globalPcDown->points,true);
+            _ikdtree.Add_Points(globalPcDown->points, true);
         }
         //std::cout<<"idtree map updated"<<std::endl;
         //printf("Update idtree map time: %f ms\n", time.toc());
@@ -912,39 +867,37 @@ void System::updateFrontendMap()
     _dispMutex.unlock();
 }
 
-void System::updateLoopStatus(state_ikfom& state)
-{
+void System::updateLoopStatus(state_ikfom &state) {
     _loopCloser->getUpdateLock().lock();
-    if (_loopCloser->isUpdated())
-    {
+    if (_loopCloser->isUpdated()) {
         // Correct new map using frames buffer in loop closing thread
         updateFrontendMap();
 
-        _isLoopCorrected = true; // For matching points threshold
-        _loopCloser->setUpdated(false);//Allow Loop closer to detect frames in buffer
+        _isLoopCorrected = true;        // For matching points threshold
+        _loopCloser->setUpdated(false); //Allow Loop closer to detect frames in buffer
 
         // Update current state
-        Eigen::Matrix4d loopTrans=_loopCloser->getLoopTrans();
+        Eigen::Matrix4d loopTrans = _loopCloser->getLoopTrans();
 
         Eigen::Matrix4d curTwg = Eigen::Matrix4d::Identity();
-        curTwg.block<3,3>(0,0)=state.rot.matrix()*_Rig;//Rwg=Rwi*Rig
-        curTwg.block<3,1>(0,3)=state.rot.matrix()*_tig+state.pos;//twg
+        curTwg.block<3, 3>(0, 0) = state.rot.matrix() * _Rig;             //Rwg=Rwi*Rig
+        curTwg.block<3, 1>(0, 3) = state.rot.matrix() * _tig + state.pos; //twg
         Eigen::Matrix4d curTwi = Eigen::Matrix4d::Identity();
-        curTwi.block<3, 3>(0, 0)=state.rot.matrix();
-        curTwi.block<3, 1>(0, 3)=state.pos;
+        curTwi.block<3, 3>(0, 0) = state.rot.matrix();
+        curTwi.block<3, 1>(0, 3) = state.pos;
         Eigen::Matrix4d Tgi = Eigen::Matrix4d::Identity();
-        Tgi.block<3,3>(0,0)=_Rig.inverse();
-        Tgi.block<3,1>(0,3)=-_Rig.inverse()*_tig;
+        Tgi.block<3, 3>(0, 0) = _Rig.inverse();
+        Tgi.block<3, 1>(0, 3) = -_Rig.inverse() * _tig;
 
-        Eigen::Matrix4d transTwg=loopTrans*curTwg;
-        Eigen::Matrix4d transTwi=transTwg*Tgi;//_loopCloser->getFrameBlocks().back()->_poseLo*Tgi;//transTwg*Tgi;
-        loopTrans=transTwi*curTwi.inverse();
+        Eigen::Matrix4d transTwg = loopTrans * curTwg;
+        Eigen::Matrix4d transTwi = transTwg * Tgi; //_loopCloser->getFrameBlocks().back()->_poseLo*Tgi;//transTwg*Tgi;
+        loopTrans = transTwi * curTwi.inverse();
 
         state.pos = transTwi.block<3, 1>(0, 3);
         state.rot = transTwi.block<3, 3>(0, 0);
         state.vel = loopTrans.block<3, 3>(0, 0) * state.vel;
         _kf.change_x(state);
-        _Rwl = state.rot * state.offset_R_L_I;  // Rwl=Rwi*Ril
+        _Rwl = state.rot * state.offset_R_L_I; // Rwl=Rwi*Ril
         _twl = state.rot.matrix() * state.offset_T_L_I + state.pos;
 
         // {//Append current frame corrected into frontend map
@@ -958,94 +911,86 @@ void System::updateLoopStatus(state_ikfom& state)
         //         updateVoxelMap();
         //     }
         // }
-        updateViewer(true);// update viewer
+        updateViewer(true); // update viewer
         //_loopCloser->getGlobalCloudDown()->clear();
-       // PAUSE;
+        // PAUSE;
     }
     _loopCloser->getUpdateLock().unlock();
 }
 
-void System::updateLoopStatus(StatesGroup& state)
-{
+void System::updateLoopStatus(StatesGroup &state) {
     _loopCloser->getUpdateLock().lock();
-    if (_loopCloser->isUpdated())
-    {
+    if (_loopCloser->isUpdated()) {
         // Correct new map using frames buffer in loop closing thread
         updateFrontendMap();
 
-        _isLoopCorrected = true; // For matching points threshold
-        _loopCloser->setUpdated(false);//Allow Loop closer to detect frames in buffer
+        _isLoopCorrected = true;        // For matching points threshold
+        _loopCloser->setUpdated(false); //Allow Loop closer to detect frames in buffer
 
         // update current state
-        Eigen::Matrix4d loopTrans=_loopCloser->getLoopTrans();
+        Eigen::Matrix4d loopTrans = _loopCloser->getLoopTrans();
 
         Eigen::Matrix4d curTwg = Eigen::Matrix4d::Identity();
-        curTwg.block<3,3>(0,0)=state.rot_end*_Rig;//Rwg=Rwi*Rig
-        curTwg.block<3,1>(0,3)=state.rot_end*_tig+state.pos_end;//twg
+        curTwg.block<3, 3>(0, 0) = state.rot_end * _Rig;                 //Rwg=Rwi*Rig
+        curTwg.block<3, 1>(0, 3) = state.rot_end * _tig + state.pos_end; //twg
         Eigen::Matrix4d curTwi = Eigen::Matrix4d::Identity();
-        curTwi.block<3, 3>(0, 0)=state.rot_end;
-        curTwi.block<3, 1>(0, 3)=state.pos_end;
+        curTwi.block<3, 3>(0, 0) = state.rot_end;
+        curTwi.block<3, 1>(0, 3) = state.pos_end;
         Eigen::Matrix4d Tgi = Eigen::Matrix4d::Identity();
-        Tgi.block<3,3>(0,0)=_Rig.inverse();
-        Tgi.block<3,1>(0,3)=-_Rig.inverse()*_tig;
+        Tgi.block<3, 3>(0, 0) = _Rig.inverse();
+        Tgi.block<3, 1>(0, 3) = -_Rig.inverse() * _tig;
 
-        Eigen::Matrix4d transTwg=loopTrans*curTwg;
-        Eigen::Matrix4d transTwi=transTwg*Tgi;//_loopCloser->getFrameBlocks().back()->_poseLo*Tgi;//transTwg*Tgi;
-        loopTrans=transTwi*curTwi.inverse();
+        Eigen::Matrix4d transTwg = loopTrans * curTwg;
+        Eigen::Matrix4d transTwi = transTwg * Tgi; //_loopCloser->getFrameBlocks().back()->_poseLo*Tgi;//transTwg*Tgi;
+        loopTrans = transTwi * curTwi.inverse();
 
         state.pos_end = transTwi.block<3, 1>(0, 3);
         state.rot_end = transTwi.block<3, 3>(0, 0);
         state.vel_end = loopTrans.block<3, 3>(0, 0) * state.vel_end;
-        _Rwl = state.rot_end * state.offset_R_L_I;  // Rwl=Rwi*Ril
+        _Rwl = state.rot_end * state.offset_R_L_I; // Rwl=Rwi*Ril
         _twl = state.rot_end * state.offset_T_L_I + state.pos_end;
 
-        {//Append current frame corrected into frontend map
+        { //Append current frame corrected into frontend map
             transCloud(_localCloudDownPtr, _globalCloudDownPtr, _Rwl, _twl);
-            if(_config._matchMethod==0)//KdTree
+            if (_config._matchMethod == 0) //KdTree
                 updateKdTreeMap(_globalCloudDownPtr->points);
-            if(_config._matchMethod==1)//Voxelmap
+            if (_config._matchMethod == 1) //Voxelmap
             {
-                if(_config._covType==2)
-                    _ikdtree.Add_Points(_globalCloudDownPtr->points,true);
+                if (_config._covType == 2)
+                    _ikdtree.Add_Points(_globalCloudDownPtr->points, true);
                 updateVoxelMap();
             }
         }
-        updateViewer(true);// update viewer
+        updateViewer(true); // update viewer
         //_loopCloser->getGlobalCloudDown()->clear();
     }
     _loopCloser->getUpdateLock().unlock();
 }
 
-
-void System::deleteUnstablePoints()
-{
+void System::deleteUnstablePoints() {
     PointVector ptToDelList;
     _ikdtree.Delete_Point_Boxes(_boxToDel);
-    if(_boxToDel.size()>0)
-        std::cout<<"Deleted boxes:"<<_boxToDel.size()<<std::endl;
+    if (_boxToDel.size() > 0)
+        std::cout << "Deleted boxes:" << _boxToDel.size() << std::endl;
 
     _boxToDel.clear();
 }
 
-void System::calibAndRefineLI()
-{
+void System::calibAndRefineLI() {
     _frameNum++;
-    if (!_config._isImuInitialized && !_isDataAccumStart && _stateCur.pos_end.norm() > 0.05)
-    {
+    if (!_config._isImuInitialized && !_isDataAccumStart && _stateCur.pos_end.norm() > 0.05) {
         printf(BOLDCYAN "[Initialization] Movement detected, data accumulation starts.\n\n\n\n\n" RESET);
         _isDataAccumStart = true;
         _moveStartTime = _lidarEndTime;
     }
     // Refine state
-    if (_config._isImuInitialized && (_frameNum % _config._origOdomFreq * _config._cutFrameNum == 0) && !_isOnlineCalibFinish)
-    {
+    if (_config._isImuInitialized && (_frameNum % _config._origOdomFreq * _config._cutFrameNum == 0) && !_isOnlineCalibFinish) {
         double onlineCalibDuration = _lidarEndTime - _onlineCalibStartTime;
         onlineCalibDuration = onlineCalibDuration < _config._onlineRefineTime ? onlineCalibDuration : _config._onlineRefineTime;
         cout << "\x1B[2J\x1B[H"; // clear the screen
         if (_config._onlineRefineTime > 0.1)
             printProgress(onlineCalibDuration / _config._onlineRefineTime);
-        if (onlineCalibDuration > (_config._onlineRefineTime - 1e-6))
-        {
+        if (onlineCalibDuration > (_config._onlineRefineTime - 1e-6)) {
             _isOnlineCalibFinish = true;
             cout << endl;
             printState();
@@ -1059,16 +1004,14 @@ void System::calibAndRefineLI()
         }
     }
     // Calibrate lidar to imu and initialize states
-    if (!_config._isImuInitialized && !_isDataAccumFinished && _isDataAccumStart)
-    {
+    if (!_config._isImuInitialized && !_isDataAccumFinished && _isDataAccumStart) {
         // Push Lidar's Angular velocity and linear velocity
         _initiatorLI->push_Lidar_CalibState(_stateCur.rot_end, _stateCur.bias_g, _stateCur.vel_end, _lidarEndTime);
         // Data Accumulation Sufficience Appraisal
         _isDataAccumFinished = _initiatorLI->data_sufficiency_assess(_jacoRot, _frameNum, _stateCur.bias_g,
                                                                      mutableConfig()._origOdomFreq, mutableConfig()._cutFrameNum);
 
-        if (_isDataAccumFinished)
-        {
+        if (_isDataAccumFinished) {
             //            std::cout<<"Data accumulation Finished"<<std::endl;
             _initiatorLI->LI_Initialization(mutableConfig()._origOdomFreq, mutableConfig()._cutFrameNum, _timediffImuWrtLidar, _moveStartTime);
 
@@ -1090,8 +1033,7 @@ void System::calibAndRefineLI()
             mutableConfig()._timeLagIMUWtrLidar = _initiatorLI->get_total_time_lag(); // Compensate IMU's time in the buffer
             for (int i = 0; i < _imuBuffer.size(); i++)
                 _imuBuffer[i]->header = _imuBuffer[i]->header - _config._timeLagIMUWtrLidar;
-            if(_config._udpateMethod==0)
-            {
+            if (_config._udpateMethod == 0) {
                 _imuProcessor->imu_en = _config._isImuInitialized;
                 _imuProcessor->LI_init_done = true;
                 _imuProcessor->set_mean_acc_norm(_config._meanAccNorm);
@@ -1109,14 +1051,13 @@ void System::calibAndRefineLI()
     }
 }
 
-bool System::assertDegeneracy()
-{
+bool System::assertDegeneracy() {
     return false;
     Eigen::MatrixXd normMat;
     normMat.resize(3, _matchedSurfList.size());
-    for(int i=0;i<_matchedSurfList.size();i++)
-        normMat.block<3,1>(0,i)=_matchedSurfList[i].normal;
-    Eigen::Matrix3d M=normMat*normMat.transpose();
+    for (int i = 0; i < _matchedSurfList.size(); i++)
+        normMat.block<3, 1>(0, i) = _matchedSurfList[i].normal;
+    Eigen::Matrix3d M = normMat * normMat.transpose();
     //std::cout<<"M:"<<M<<std::endl;
     Eigen::EigenSolver<Eigen::Matrix3d> es(M);
     Eigen::Matrix3cd evecs = es.eigenvectors();
@@ -1130,28 +1071,26 @@ bool System::assertDegeneracy()
     double minEigenValue = evalsReal(evalsMin);
     double midEigenValue = evalsReal(evalsMid);
     double maxEigenValue = evalsReal(evalsMax);
-    double ratio1=minEigenValue/midEigenValue;
-    double ratio2=midEigenValue/maxEigenValue;
-//    std::cout<<"ratio1:"<<ratio1<<std::endl;
-//    std::cout<<"ratio2:"<<ratio2<<std::endl;
-    if(ratio1<0.05||ratio2<0.05)
+    double ratio1 = minEigenValue / midEigenValue;
+    double ratio2 = midEigenValue / maxEigenValue;
+    //    std::cout<<"ratio1:"<<ratio1<<std::endl;
+    //    std::cout<<"ratio2:"<<ratio2<<std::endl;
+    if (ratio1 < 0.05 || ratio2 < 0.05)
         return true;
     return false;
 }
 
-void System::mapping()
-{
-    if(_frameId<_config._nSkipFrames)
+void System::mapping() {
+    if (_frameId < _config._nSkipFrames)
         return;
 
     if (_measures.lidar->empty())
         return;
 
     // Motor data exists: transform local pcl into motor zero angle coordinate(let pl be coord in motor zero axis)
-    if (System::config()._isMotorInitialized&&_curMotorAngle >= 0)
-    {
+    if (System::config()._isMotorInitialized && _curMotorAngle >= 0) {
         //TicToc time;
-        if(_cloudAxisTransfer)// for ZG device
+        if (_cloudAxisTransfer) // for ZG device
             motorMotionCompensationZG();
         else // other devices(extrinsic consist of lidar->motor(0 deg), motor(0 deg)->imu)
         {
@@ -1161,32 +1100,31 @@ void System::mapping()
         }
         //printf("Motor undistort time: %f ms\n", time.toc());
     }
-//    ostringstream pathOfs;
-//    pathOfs<<std::setprecision(6)<<std::fixed<<string(ROOT_DIR) + "PCD/"<<_lidarBegTime-_sensorTimeDiff<<".txt";
-//    ReadWriter::outputCloudFile(pathOfs.str(),*_measures.lidar);
+    //    ostringstream pathOfs;
+    //    pathOfs<<std::setprecision(6)<<std::fixed<<string(ROOT_DIR) + "PCD/"<<_lidarBegTime-_sensorTimeDiff<<".txt";
+    //    ReadWriter::outputCloudFile(pathOfs.str(),*_measures.lidar);
 
-//    static std::ofstream fCloudOfs =std::ofstream(string(ROOT_DIR) + "PCD/all.txt", std::ios::trunc | std::ios::in);
-//    for(auto& pt: _measures.lidar->points)
-//        fCloudOfs<<std::fixed<<std::setprecision(8)<<","<<pt.x<<","<<pt.y<<","<<pt.z<<","<<rad2deg(_curMotorAngle)<<std::endl;
+    //    static std::ofstream fCloudOfs =std::ofstream(string(ROOT_DIR) + "PCD/all.txt", std::ios::trunc | std::ios::in);
+    //    for(auto& pt: _measures.lidar->points)
+    //        fCloudOfs<<std::fixed<<std::setprecision(8)<<","<<pt.x<<","<<pt.y<<","<<pt.z<<","<<rad2deg(_curMotorAngle)<<std::endl;
 
     *_localCloudPtr = *_measures.lidar;
     // merge cloud by motor angle
-    if(_frameId<_config._nMergedFrames)//_nMergedFrames=0
+    if (_frameId < _config._nMergedFrames) //_nMergedFrames=0
         processCloudOnlyMotor();
     // calibrate IMU extrinsic
-    else if(!_config._isImuInitialized)
+    else if (!_config._isImuInitialized)
         processCloudESIKF();
     // Mapping without imu
     else if (_measures.imu.empty())
         //processCloudCeres();
         //processCloudLSQ(_regVGICP);
         processCloudVGICP();
-//    // Mapping with imu
-    else if (!_measures.imu.empty())
-    {
-        if(_config._udpateMethod==0)
+    //    // Mapping with imu
+    else if (!_measures.imu.empty()) {
+        if (_config._udpateMethod == 0)
             processCloudIKFoM();
-            //processCloudESIKF();
+        //processCloudESIKF();
         else
             processCloudLSQ(_regPCL_VGICP);
         // processCloudVGICP();
@@ -1194,19 +1132,69 @@ void System::mapping()
     }
 }
 
-void System::mapping_calib()
-{
-    if(_frameId<_config._nSkipFrames)
+void System::mapping_sim() {
+    if (_frameId < _config._nSkipFrames)
         return;
 
     if (_measures.lidar->empty())
         return;
 
     // Motor data exists: transform local pcl into motor zero angle coordinate(let pl be coord in motor zero axis)
-    if (System::config()._isMotorInitialized&&_curMotorAngle >= 0)
-    {
+    if (System::config()._isMotorInitialized && _curMotorAngle >= 0) {
         //TicToc time;
-        if(_cloudAxisTransfer)// for ZG device
+        if (_cloudAxisTransfer) // for ZG device
+            motorMotionCompensationZGforSIM();
+        else // other devices(extrinsic consist of lidar->motor(0 deg), motor(0 deg)->imu)
+        {
+            transCloudInMotorAxis(_measures.lidar, _measures.lidar, 0, _Rol, _tol);
+            motorMotionCompensation();
+            transCloudInMotorAxis(_measures.lidar, _measures.lidar, _curMotorAngle, Eigen::Matrix3d::Identity(), Eigen::Vector3d::Zero());
+        }
+        //printf("Motor undistort time: %f ms\n", time.toc());
+    }
+    //    ostringstream pathOfs;
+    //    pathOfs<<std::setprecision(6)<<std::fixed<<string(ROOT_DIR) + "PCD/"<<_lidarBegTime-_sensorTimeDiff<<".txt";
+    //    ReadWriter::outputCloudFile(pathOfs.str(),*_measures.lidar);
+
+    //    static std::ofstream fCloudOfs =std::ofstream(string(ROOT_DIR) + "PCD/all.txt", std::ios::trunc | std::ios::in);
+    //    for(auto& pt: _measures.lidar->points)
+    //        fCloudOfs<<std::fixed<<std::setprecision(8)<<","<<pt.x<<","<<pt.y<<","<<pt.z<<","<<rad2deg(_curMotorAngle)<<std::endl;
+
+    *_localCloudPtr = *_measures.lidar;
+    // merge cloud by motor angle
+    if (_frameId < _config._nMergedFrames) //_nMergedFrames=0
+        processCloudOnlyMotor();
+    // calibrate IMU extrinsic
+    else if (!_config._isImuInitialized)
+        processCloudESIKF();
+    // Mapping without imu
+    else if (_measures.imu.empty())
+        //processCloudCeres();
+        //processCloudLSQ(_regVGICP);
+        processCloudVGICP();
+    //    // Mapping with imu
+    else if (!_measures.imu.empty()) {
+        if (_config._udpateMethod == 0)
+            processCloudIKFoM();
+        //processCloudESIKF();
+        else
+            processCloudLSQ(_regPCL_VGICP);
+        // processCloudVGICP();
+        //processCloudLOAM();
+    }
+}
+
+void System::mapping_calib() {
+    if (_frameId < _config._nSkipFrames)
+        return;
+
+    if (_measures.lidar->empty())
+        return;
+
+    // Motor data exists: transform local pcl into motor zero angle coordinate(let pl be coord in motor zero axis)
+    if (System::config()._isMotorInitialized && _curMotorAngle >= 0) {
+        //TicToc time;
+        if (_cloudAxisTransfer) // for ZG device
             motorMotionCompensationZG();
         else // other devices(extrinsic consist of lidar->motor(0 deg), motor(0 deg)->imu)
         {
@@ -1216,33 +1204,32 @@ void System::mapping_calib()
         }
         //printf("Motor undistort time: %f ms\n", time.toc());
     }
-//    ostringstream pathOfs;
-//    pathOfs<<std::setprecision(6)<<std::fixed<<string(ROOT_DIR) + "PCD/"<<_lidarBegTime-_sensorTimeDiff<<".txt";
-//    ReadWriter::outputCloudFile(pathOfs.str(),*_measures.lidar);
+    //    ostringstream pathOfs;
+    //    pathOfs<<std::setprecision(6)<<std::fixed<<string(ROOT_DIR) + "PCD/"<<_lidarBegTime-_sensorTimeDiff<<".txt";
+    //    ReadWriter::outputCloudFile(pathOfs.str(),*_measures.lidar);
 
-//    static std::ofstream fCloudOfs =std::ofstream(string(ROOT_DIR) + "PCD/all.txt", std::ios::trunc | std::ios::in);
-//    for(auto& pt: _measures.lidar->points)
-//        fCloudOfs<<std::fixed<<std::setprecision(8)<<","<<pt.x<<","<<pt.y<<","<<pt.z<<","<<rad2deg(_curMotorAngle)<<std::endl;
+    //    static std::ofstream fCloudOfs =std::ofstream(string(ROOT_DIR) + "PCD/all.txt", std::ios::trunc | std::ios::in);
+    //    for(auto& pt: _measures.lidar->points)
+    //        fCloudOfs<<std::fixed<<std::setprecision(8)<<","<<pt.x<<","<<pt.y<<","<<pt.z<<","<<rad2deg(_curMotorAngle)<<std::endl;
 
     *_localCloudPtr = *_measures.lidar;
     // merge cloud by motor angle
-    if(_frameId<_config._nMergedFrames)//_nMergedFrames=0
+    if (_frameId < _config._nMergedFrames) //_nMergedFrames=0
         processCloudOnlyMotor();
     // calibrate IMU extrinsic
-    else if(!_config._isImuInitialized)
+    else if (!_config._isImuInitialized)
         processCloudESIKF();
     // Mapping without imu
     else if (_measures.imu.empty())
         //processCloudCeres();
         //processCloudLSQ(_regVGICP);
         processCloudVGICP();
-//    // Mapping with imu
-    else if (!_measures.imu.empty())
-    {
-        if(_config._udpateMethod==0)
+    //    // Mapping with imu
+    else if (!_measures.imu.empty()) {
+        if (_config._udpateMethod == 0)
             //processCloudIKFoM();
             processCloudIKFoM_calib();
-            //processCloudESIKF();
+        //processCloudESIKF();
         else
             processCloudLSQ(_regPCL_VGICP);
         // processCloudVGICP();
@@ -1250,20 +1237,17 @@ void System::mapping_calib()
     }
 }
 
-
-void System::mapping_undist()
-{
-    if(_frameId<_config._nSkipFrames)
+void System::mapping_undist() {
+    if (_frameId < _config._nSkipFrames)
         return;
 
     if (_measures.lidar->empty())
         return;
 
     // Motor data exists: transform local pcl into motor zero angle coordinate(let pl be coord in motor zero axis)
-    if (System::config()._isMotorInitialized&&_curMotorAngle >= 0)
-    {
+    if (System::config()._isMotorInitialized && _curMotorAngle >= 0) {
         //TicToc time;
-        if(_cloudAxisTransfer)// for ZG device
+        if (_cloudAxisTransfer) // for ZG device
             motorMotionCompensationZG();
         else // other devices(extrinsic consist of lidar->motor(0 deg), motor(0 deg)->imu)
         {
@@ -1341,39 +1325,44 @@ void System::mapping_undist()
 //#endif
 //}
 
-void System::processGNSS()
-{
+void System::processGNSS() {
 #ifdef GTSAM_ON
-    if(_loopCloser&&!_loopCloser->getFrameBlocks().empty())
-    {
-        if(_lastGNSSData)
-            if((_measures.gnss->pos-_lastGNSSData->pos).norm()<0.5)
+    if (_loopCloser && !_loopCloser->getFrameBlocks().empty()) {
+        if (_lastGNSSData)
+            if ((_measures.gnss->pos - _lastGNSSData->pos).norm() < 0.5)
                 return;
         _lastGNSSData = _measures.gnss;
 
         //constraints framewisePgoEdges;
-       // _loopCloser->constructFrameEdges(framewisePgoEdges);
+        // _loopCloser->constructFrameEdges(framewisePgoEdges);
         _loopCloser->addGNSSFrameIdx(_frameId);
         _gpsConstraintBuf.emplace_back(_measures.gnss, _frameId);
 
-        static std::vector<double> sourceFramePts,targetFramePts;
-        if(!_isGnssInited)
-        {
+        static std::vector<double> sourceFramePts, targetFramePts;
+        if (!_isGnssInited) {
             for (size_t i = 0; i < 3; i++)
                 targetFramePts.emplace_back(_twl(i));
             for (size_t i = 0; i < 3; i++)
                 sourceFramePts.emplace_back(_measures.gnss->pos[i]);
 
-            if(_gpsConstraintBuf.size()>=config()._gnssInitSize)
-            {
-                double R[9]; double t[3];
+            if (_gpsConstraintBuf.size() >= config()._gnssInitSize) {
+                double R[9];
+                double t[3];
                 double s = 1.0;
-                if(AbsouteOrientation::runCalSevenParams(targetFramePts, sourceFramePts, _gpsConstraintBuf.size(), R, t, s))
-                {
-                    _gnssTrans(0, 0) = R[0]; _gnssTrans(0, 1) = R[1]; _gnssTrans(0, 2) = R[2];_gnssTrans(0, 3) = t[0];
-                    _gnssTrans(1, 0) = R[3]; _gnssTrans(1, 1) = R[4]; _gnssTrans(1, 2) = R[5];_gnssTrans(1, 3) = t[1];
-                    _gnssTrans(2, 0) = R[6]; _gnssTrans(2, 1) = R[7]; _gnssTrans(2, 2) = R[8];_gnssTrans(2, 3) = t[2];
-                    _isGnssInited=true;
+                if (AbsouteOrientation::runCalSevenParams(targetFramePts, sourceFramePts, _gpsConstraintBuf.size(), R, t, s)) {
+                    _gnssTrans(0, 0) = R[0];
+                    _gnssTrans(0, 1) = R[1];
+                    _gnssTrans(0, 2) = R[2];
+                    _gnssTrans(0, 3) = t[0];
+                    _gnssTrans(1, 0) = R[3];
+                    _gnssTrans(1, 1) = R[4];
+                    _gnssTrans(1, 2) = R[5];
+                    _gnssTrans(1, 3) = t[1];
+                    _gnssTrans(2, 0) = R[6];
+                    _gnssTrans(2, 1) = R[7];
+                    _gnssTrans(2, 2) = R[8];
+                    _gnssTrans(2, 3) = t[2];
+                    _isGnssInited = true;
                     targetFramePts.clear();
                     sourceFramePts.clear();
                     //std::cout<<"Gnss trans matrix:\n"<<_gnssTrans<<std::endl;
@@ -1381,22 +1370,19 @@ void System::processGNSS()
                 }
             }
         }
-        if(_isGnssInited)
-        {
+        if (_isGnssInited) {
             static PointCloudXYZI::Ptr gnssCloud(new PointCloudXYZI());
             _dispMutex.lock();
-            while(!_gpsConstraintBuf.empty())
-            {
-                SensorMsgs::GNSSData::Ptr gpsData=_gpsConstraintBuf.front().first;
-                const int& frameID=_gpsConstraintBuf.front().second;
+            while (!_gpsConstraintBuf.empty()) {
+                SensorMsgs::GNSSData::Ptr gpsData = _gpsConstraintBuf.front().first;
+                const int &frameID = _gpsConstraintBuf.front().second;
 
                 SensorMsgs::GNSSData::Ptr gpsDataTrans(new SensorMsgs::GNSSData(*gpsData));
-                gpsDataTrans->pos=_gnssTrans.block<3,3>(0,0)*gpsData->pos+_gnssTrans.block<3,1>(0,3);
+                gpsDataTrans->pos = _gnssTrans.block<3, 3>(0, 0) * gpsData->pos + _gnssTrans.block<3, 1>(0, 3);
 
                 _gpsConstraintBuf.pop_front();
                 //std::cout<<"Add GNSS pos contraint to frame "<<frameID<<": "<<gpsDataTrans->pos.transpose()<<std::endl;
-                if(_loopCloser->config()._isOutputPCD)
-                {
+                if (_loopCloser->config()._isOutputPCD) {
                     PointType pt;
                     pt.x = gpsDataTrans->pos.x();
                     pt.y = gpsDataTrans->pos.y();
@@ -1405,36 +1391,33 @@ void System::processGNSS()
                 }
 
                 _loopCloser->inputGNSSData(gpsDataTrans, frameID);
-                if(config()._isEnable3DViewer)
+                if (config()._isEnable3DViewer)
                     _gnssQueue.emplace(gpsDataTrans);
             }
             _dispMutex.unlock();
-            if(_loopCloser->config()._isOutputPCD)
-            {
+            if (_loopCloser->config()._isOutputPCD) {
                 pcl::PCDWriter pcdWriter;
                 pcdWriter.writeBinary(string(ROOT_DIR) + "PCD/gnssCloud.pcd", *gnssCloud);
             }
 
-//            if(_loopCloser->config()._isPgoIncremental)
-//            {
-//                _loopCloser->frameGraphOptimize();
-//                if(!_loopCloser->config()._isCorrectRealTime)
-//                    _loopCloser->correctFrontendMap(_loopCloser->getFrameBlocks());
-//                updateLoopStatus(_stateIkfom);
-//            }
+            //            if(_loopCloser->config()._isPgoIncremental)
+            //            {
+            //                _loopCloser->frameGraphOptimize();
+            //                if(!_loopCloser->config()._isCorrectRealTime)
+            //                    _loopCloser->correctFrontendMap(_loopCloser->getFrameBlocks());
+            //                updateLoopStatus(_stateIkfom);
+            //            }
         }
         //PAUSE;
     }
 #endif
 }
 
-bool System::syncPackages(MeasureGroup &meas)
-{
+bool System::syncPackages(MeasureGroup &meas) {
     if (_lidarBuffer.empty())
         return false;
     /*** push a lidar scan ***/
-    if (!_isLidarPushed)
-    {
+    if (!_isLidarPushed) {
         meas.lidar = _lidarBuffer.front();
         meas.lidar_beg_time = _timeBuffer.front();
         if (meas.lidar->points.size() <= _config._minFramePoint) // frame points too little
@@ -1443,12 +1426,8 @@ bool System::syncPackages(MeasureGroup &meas)
             _timeBuffer.pop_front();
             std::cerr << "Skip scan: Too few input point cloud!" << std::endl;
             return false;
-        }
-        else
-        {
-            if (LidarProcess::config()._lidarType == TIMOO16 &&
-            (meas.lidar->points.back().curvature - meas.lidar->points.front().curvature < 0.5 * double(1000) / double(_config._origOdomFreq * _config._cutFrameNum)))
-            {
+        } else {
+            if (LidarProcess::config()._lidarType == TIMOO16 && (meas.lidar->points.back().curvature - meas.lidar->points.front().curvature < 0.5 * double(1000) / double(_config._origOdomFreq * _config._cutFrameNum))) {
                 std::cerr << "TIMOO lidar timestamp error!\n";
                 _lidarBuffer.pop_front();
                 _timeBuffer.pop_front();
@@ -1468,50 +1447,43 @@ bool System::syncPackages(MeasureGroup &meas)
     // ensure motor data exist after current lidar frame
     if (!_motorAngleBuf.empty() && _lastMotorTimestamp < _lidarEndTime)
         return false;
-    if (!_imuBuffer.empty() && _config._isMotorInitialized)
-    {
+    if (!_imuBuffer.empty() && _config._isMotorInitialized) {
         // ensure imu data exist after current lidar frame
         if (_lastImuTimestamp < _lidarEndTime)
             return false;
         /*** push imu data, and pop from imu buffer ***/
         double imuTime = _imuBuffer.front()->header;
         meas.imu.clear();
-        while ((!_imuBuffer.empty()) && (imuTime < _lidarEndTime))
-        {
-            auto& frontIMUData=_imuBuffer.front();
+        while ((!_imuBuffer.empty()) && (imuTime < _lidarEndTime)) {
+            auto &frontIMUData = _imuBuffer.front();
             imuTime = _imuBuffer.front()->header;
             if (imuTime > _lidarEndTime)
                 break;
             meas.imu.push_back(_imuBuffer.front());
-            if(_imuPreintegration)
-            {
-                if(imuTime<=_lidarEndTime)
-                {
-                    if(_imuPreintegration->predictByImu(frontIMUData, _statePropagat))
-                    {
-                        const gtsam::NavState& curState=_imuPreintegration->getCurState();
-                        Pose6D imuPose=set_pose6d(imuTime - _lidarBegTime,
-                                                  frontIMUData->linear_acceleration,frontIMUData->angular_velocity,
-                                                  curState.velocity(),curState.position(),curState.R());
-                        _imuProcessor->pushIMUPose(imuPose);  // For cloud undistortion
-                        _stateCur=_statePropagat;
+            if (_imuPreintegration) {
+                if (imuTime <= _lidarEndTime) {
+                    if (_imuPreintegration->predictByImu(frontIMUData, _statePropagat)) {
+                        const gtsam::NavState &curState = _imuPreintegration->getCurState();
+                        Pose6D imuPose = set_pose6d(imuTime - _lidarBegTime,
+                                                    frontIMUData->linear_acceleration, frontIMUData->angular_velocity,
+                                                    curState.velocity(), curState.position(), curState.R());
+                        _imuProcessor->pushIMUPose(imuPose); // For cloud undistortion
+                        _stateCur = _statePropagat;
                         //printf(REDPURPLE "[Preintergrate] " RESET);
                         //std::cout << "Pos in World Frame   = " << _stateCur.pos_end.transpose() << std::endl;
                         // PAUSE;
                     }
 
-                   // std::cout<<std::setprecision(6)<<std::fixed<<imuTime<<": "<<frontIMUData->orientation.coeffs().transpose()<<std::endl;
-                   // _stateCur.rot_end = frontIMUData->orientation.matrix();
+                    // std::cout<<std::setprecision(6)<<std::fixed<<imuTime<<": "<<frontIMUData->orientation.coeffs().transpose()<<std::endl;
+                    // _stateCur.rot_end = frontIMUData->orientation.matrix();
                 }
             }
             _imuBuffer.pop_front();
         }
     }
     /*** get current motor angle, and pop from motor buffer ***/
-    if (!_motorAngleBuf.empty())
-    {
-        if (!collectRasterAngles(meas.lidar_beg_time + meas.lidar->front().curvature / double(1000), meas.lidar_end_time))
-        {
+    if (!_motorAngleBuf.empty()) {
+        if (!collectRasterAngles(meas.lidar_beg_time + meas.lidar->front().curvature / double(1000), meas.lidar_end_time)) {
             _lidarBuffer.pop_front();
             _timeBuffer.pop_front();
             _isLidarPushed = false;
@@ -1522,19 +1494,16 @@ bool System::syncPackages(MeasureGroup &meas)
         //        cout << "Current Motor Angle: " << _curMotorAngle << endl;
     }
 
-    if(!_gpsBuffer.empty())
-    {
+    if (!_gpsBuffer.empty()) {
         /*** push imu data, and pop from imu buffer ***/
-        while ((!_gpsBuffer.empty()))
-        {
-            auto& frontGPSData=_gpsBuffer.front();
+        while ((!_gpsBuffer.empty())) {
+            auto &frontGPSData = _gpsBuffer.front();
             const double gpsTime = _gpsBuffer.front()->header;
-//            std::cout<<"gpsTime:"<<gpsTime<<std::endl;
-//            std::cout<<"lidarEndTime:"<<_lidarEndTime<<std::endl;
-            if (gpsTime > _lidarEndTime+0.1)
+            //            std::cout<<"gpsTime:"<<gpsTime<<std::endl;
+            //            std::cout<<"lidarEndTime:"<<_lidarEndTime<<std::endl;
+            if (gpsTime > _lidarEndTime + 0.1)
                 break;
-            if (gpsTime > _lidarEndTime-0.1)
-            {
+            if (gpsTime > _lidarEndTime - 0.1) {
                 meas.gnss = frontGPSData;
                 _gpsBuffer.pop_front();
                 break;
@@ -1549,15 +1518,11 @@ bool System::syncPackages(MeasureGroup &meas)
     return true;
 }
 
-void System::collectMotorIMU()
-{
-    while (!_motorAngleBufAll.empty())
-    {
-        double frontTime = _motorAngleBufAll.front().first+_sensorTimeDiff;
-        if(frontTime <= _lidarEndTime+0.1)
-        {
-            if (frontTime < _lastMotorTimestamp)
-            {
+void System::collectMotorIMU() {
+    while (!_motorAngleBufAll.empty()) {
+        double frontTime = _motorAngleBufAll.front().first + _sensorTimeDiff;
+        if (frontTime <= _lidarEndTime + 0.1) {
+            if (frontTime < _lastMotorTimestamp) {
                 std::cerr << "Motor loop back." << std::endl;
                 //_motorAngleBuf.clear();
                 _motorAngleBufAll.pop_front();
@@ -1569,19 +1534,15 @@ void System::collectMotorIMU()
 
             _motorAngleBufAll.pop_front();
             // cout << "motorTimestamp: " << frontTime << ", _lidarBegTime: " << _lidarBegTime << endl;
-        }
-        else
+        } else
             break;
     }
 
-    while (!_imuBufferAll.empty())
-    {
+    while (!_imuBufferAll.empty()) {
         double frontTime = _imuBufferAll.front()->header + _sensorTimeDiff - _timediffImuWrtLidar - _config._timeLagIMUWtrLidar;
-        if (frontTime <= _lidarEndTime+0.1)
-        {
+        if (frontTime <= _lidarEndTime + 0.1) {
             // IMU Time Compensation
-            if (frontTime < _lastImuTimestamp)
-            {
+            if (frontTime < _lastImuTimestamp) {
                 std::cerr << "IMU loop back, clear IMU buffer." << std::endl;
                 _imuBuffer.clear();
             }
@@ -1595,19 +1556,15 @@ void System::collectMotorIMU()
                 _initiatorLI->push_ALL_IMU_CalibState(_imuBufferAll.front(), _config._meanAccNorm);
             _imuBufferAll.pop_front();
             // cout << "imuTimestamp: " << frontTime + _timediffImuWrtLidar + _timeLagIMUWtrLidar << ", _lidarBegTime: " << _lidarBegTime << endl;
-        }
-        else
+        } else
             break;
     }
 
-    while (!_gpsBufferAll.empty())
-    {
+    while (!_gpsBufferAll.empty()) {
         double frontTime = _gpsBufferAll.front()->header;
-        if (frontTime <= _lidarEndTime+0.1)
-        {
+        if (frontTime <= _lidarEndTime + 0.1) {
             // IMU Time Compensation
-            if (frontTime < _lastGPSTimestamp)
-            {
+            if (frontTime < _lastGPSTimestamp) {
                 std::cerr << "IMU loop back, clear IMU buffer." << std::endl;
                 _gpsBuffer.clear();
             }
@@ -1616,14 +1573,12 @@ void System::collectMotorIMU()
             _gpsBuffer.push_back(_gpsBufferAll.front());
             _gpsBufferAll.pop_front();
             // cout << "imuTimestamp: " << frontTime + _timediffImuWrtLidar + _timeLagIMUWtrLidar << ", _lidarBegTime: " << _lidarBegTime << endl;
-        }
-        else
+        } else
             break;
     }
 }
 
-double System::getSensorTimeDiff(double lidTime, double imuTime)
-{
+double System::getSensorTimeDiff(double lidTime, double imuTime) {
     tm *tm_lidar, *tm_raw;
     tm tm_lidar_new, tm_raw_new;
 
@@ -1651,54 +1606,46 @@ double System::getSensorTimeDiff(double lidTime, double imuTime)
     time_t t_lidar = mktime(&tm_lidar_new) + 28800.;
     time_t t_raw = mktime(&tm_raw_new) - 28800.;
     //std::cout << "t_lidar: " << t_lidar << std::endl;
-   // std::cout << "t_raw: " << t_raw << std::endl;
+    // std::cout << "t_raw: " << t_raw << std::endl;
 
     return t_lidar - t_raw;
 }
 
-void System::lidCallback(PPointCloud::Ptr cloudIn, double lidTime)
-{
+void System::lidCallback(PPointCloud::Ptr cloudIn, double lidTime) {
     _mtxBuffer.lock();
 
-    if (_isFirstLidarFrame && _config._isTimeSyncEn)
-    {
+    if (_isFirstLidarFrame && _config._isTimeSyncEn) {
         _isFirstLidarFrame = false;
         _sensorTimeDiff = getSensorTimeDiff(lidTime, _imuBufferAll.front()->header);
     }
 
-    if (lidTime < _lidarEndTime)
-    {
+    if (lidTime < _lidarEndTime) {
         std::cerr << "lidar loop back, clear buffer" << std::endl;
         _lidarBuffer.clear();
         _timeBuffer.clear();
     }
     _lidarBegTime = lidTime;
-   // cout << std::fixed << std::setprecision(6) << "Lidar beg time: " << lidTime << endl;
+    // cout << std::fixed << std::setprecision(6) << "Lidar beg time: " << lidTime << endl;
 
-    if (!_isTimediffSetFlg && abs(_lidarBegTime - _lastImuTimestamp) > 20. && !_imuBuffer.empty())
-    {
+    if (!_isTimediffSetFlg && abs(_lidarBegTime - _lastImuTimestamp) > 20. && !_imuBuffer.empty()) {
         _isTimediffSetFlg = true;
         _timediffImuWrtLidar = _lastImuTimestamp - _lidarBegTime;
         printf("Self sync IMU and Lidar, time diff is %.10lf \n", _timediffImuWrtLidar);
     }
-    if (!_config._isCutFrame)
-    {
+    if (!_config._isCutFrame) {
         PointCloudXYZI::Ptr cloudOut(new PointCloudXYZI());
         _lidarProcessor->process(cloudIn, lidTime, cloudOut);
         _lidarBuffer.push_back(cloudOut);
         _timeBuffer.push_back(lidTime);
         // std::cout<<"Lidar begin:"<<cloudOut->front().curvature<<std::endl;
         // std::cout<<"Lidar end:"<<cloudOut->back().curvature<<std::endl;
-    }
-    else
-    {
+    } else {
         static int scanCount = 0;
         deque<PointCloudXYZI::Ptr> ptrQueue;
         deque<double> timeQueue;
 
         _lidarProcessor->processCutFrameCloud(cloudIn, lidTime, ptrQueue, timeQueue, _config._cutFrameNum, scanCount++);
-        while (!ptrQueue.empty() && !timeQueue.empty())
-        {
+        while (!ptrQueue.empty() && !timeQueue.empty()) {
             _lidarBuffer.push_back(ptrQueue.front());
             ptrQueue.pop_front();
             _timeBuffer.push_back(timeQueue.front() / double(1000)); // unit:s
@@ -1708,24 +1655,23 @@ void System::lidCallback(PPointCloud::Ptr cloudIn, double lidTime)
 
     _mtxBuffer.unlock();
     _sigBuffer.notify_all();
-    if (syncPackages(_measures))
-    {
+    if (syncPackages(_measures)) {
         if (!_config._isMotorInitialized)
             motorInitialize();
         else
             mapping();
 
-        std::cout << "Frame id: " << _frameId << std::endl << std::endl;
+        std::cout << "Frame id: " << _frameId << std::endl
+                  << std::endl;
         _frameId++;
     }
 }
 
-void System::loadParams(const std::string &filePath)
-{
+void System::loadParams(const std::string &filePath) {
     // load params
     YAML::Node node = YAML::LoadFile(filePath);
 
-    const YAML::Node& common = node["common"];
+    const YAML::Node &common = node["common"];
     _config._imuFilePath = common["imu_file_path"].as<std::string>();
     _config._rasterFilePath = common["raster_file_path"].as<std::string>();
     _config._pcapFilePath = common["pcap_file_path"].as<std::string>();
@@ -1737,7 +1683,7 @@ void System::loadParams(const std::string &filePath)
     _config._nSkipFrames = common["skip_frames"].as<int>();
     _config._enableGravityAlign = common["enable_gravity_align"].as<bool>();
 
-    const YAML::Node& preprocess = node["preprocess"];
+    const YAML::Node &preprocess = node["preprocess"];
     _config._minFramePoint = preprocess["min_frame_point"].as<int>();
     _config._isFeatExtractEn = preprocess["feature_extract_en"].as<bool>();
     _config._featureExtractSegNum = preprocess["feature_extract_seg_num"].as<int>();
@@ -1750,7 +1696,7 @@ void System::loadParams(const std::string &filePath)
     LidarProcess::mutableConfig()._timeUnit = preprocess["timestamp_unit"].as<int>();
     LidarProcess::mutableConfig()._scanRate = preprocess["scan_rate"].as<int>();
 
-    const YAML::Node& initialization = node["initialization"];
+    const YAML::Node &initialization = node["initialization"];
     _config._isCutFrame = initialization["cut_frame"].as<bool>();
     _config._cutFrameNum = initialization["cut_frame_num"].as<int>();
     _config._origOdomFreq = initialization["orig_odom_freq"].as<int>();
@@ -1760,10 +1706,10 @@ void System::loadParams(const std::string &filePath)
     _config._rotLICov = initialization["Rot_LI_cov"].as<vector<double>>();
     _config._transLICov = initialization["Trans_LI_cov"].as<vector<double>>();
     _config._maxInierError = initialization["motor_inlier_error"].as<double>();
-    _config._imuMaxInitCount=initialization["imu_init_size"].as<int>();
-    _config._gnssInitSize=initialization["gnss_init_size"].as<int>();
+    _config._imuMaxInitCount = initialization["imu_init_size"].as<int>();
+    _config._gnssInitSize = initialization["gnss_init_size"].as<int>();
 
-    const YAML::Node& mapping = node["mapping"];
+    const YAML::Node &mapping = node["mapping"];
     _config._udpateMethod = mapping["update_method"].as<int>();
     _config._matchMethod = mapping["match_method"].as<int>();
     _config._nMaxInterations = mapping["max_iteration"].as<int>();
@@ -1783,7 +1729,7 @@ void System::loadParams(const std::string &filePath)
     _config._tigVec = mapping["extrinsic_tig"].as<vector<double>>();
     _config._RigVec = mapping["extrinsic_Rig"].as<vector<double>>();
     _config._isEstiExtrinsic = mapping["extrinsic_est_en"].as<bool>();
-    _config._gnssMaxError=mapping["gnss_max_error"].as<double>();
+    _config._gnssMaxError = mapping["gnss_max_error"].as<double>();
 
     _config._maxPointsSize = mapping["max_points_size"].as<int>();
     _config._maxCovPointsSize = mapping["max_cov_points_size"].as<int>();
@@ -1795,7 +1741,7 @@ void System::loadParams(const std::string &filePath)
     _config._angleCov = mapping["angle_cov"].as<double>();
     _config._covType = mapping["covariance_type"].as<int>();
 
-    const YAML::Node& BundleAdjustment = node["BundleAdjustment"];
+    const YAML::Node &BundleAdjustment = node["BundleAdjustment"];
     _config._isEnableBA = BundleAdjustment["is_enable_BA"].as<bool>();
     _config._isVerbose = BundleAdjustment["is_verbose"].as<bool>();
     _config._filterNum = BundleAdjustment["filter_num"].as<int>();
@@ -1803,11 +1749,11 @@ void System::loadParams(const std::string &filePath)
     _config._windowSize = BundleAdjustment["window_size"].as<int>();
     _config._marginSize = BundleAdjustment["margin_size"].as<int>();
 
-    const YAML::Node& LoopClosing = node["LoopClosing"];
+    const YAML::Node &LoopClosing = node["LoopClosing"];
     _config._isLoopEn = LoopClosing["is_loop_en"].as<bool>();
 
     LoopCloser::mutableConfig()._poseGraphOptimizationMethod = LoopClosing["PGO_method"].as<std::string>();
-    LoopCloser::mutableConfig()._detectLoopMethod= LoopClosing["detect_method"].as<int>();
+    LoopCloser::mutableConfig()._detectLoopMethod = LoopClosing["detect_method"].as<int>();
     LoopCloser::mutableConfig()._detectorConfigPath = LoopClosing["detector_config_path"].as<std::string>();
     LoopCloser::mutableConfig()._coolingSubmapNum = LoopClosing["cooling_submap_num"].as<int>();
     LoopCloser::mutableConfig()._numFrameLargeDrift = LoopClosing["num_frame_large_drift"].as<int>();
@@ -1828,45 +1774,41 @@ void System::loadParams(const std::string &filePath)
     LoopCloser::mutableConfig()._isCorrectRealTime = LoopClosing["is_correct_realTime"].as<bool>();
     LoopCloser::mutableConfig()._isLoopDetectEn = LoopClosing["loop_detect_enable"].as<bool>();
     LoopCloser::mutableConfig()._isOutputPCD = LoopClosing["is_output_PCD"].as<bool>();
-    LoopCloser::mutableConfig()._frontendWinSize=LoopClosing["frontend_win_size"].as<int>();
+    LoopCloser::mutableConfig()._frontendWinSize = LoopClosing["frontend_win_size"].as<int>();
 
-    LoopCloser::mutableConfig()._voxelLength=config()._voxelLength;
-    LoopCloser::mutableConfig()._maxLayers=config()._maxLayers;
-    LoopCloser::mutableConfig()._layerPointSizeList=config()._layerPointSizeList;
-    LoopCloser::mutableConfig()._maxPointsSize=config()._maxPointsSize;
-    LoopCloser::mutableConfig()._maxCovPointsSize=config()._maxCovPointsSize;
-    LoopCloser::mutableConfig()._minEigenValue=config()._minSurfEigenValue;
-    LoopCloser::mutableConfig()._gnssMaxError=config()._gnssMaxError;
+    LoopCloser::mutableConfig()._voxelLength = config()._voxelLength;
+    LoopCloser::mutableConfig()._maxLayers = config()._maxLayers;
+    LoopCloser::mutableConfig()._layerPointSizeList = config()._layerPointSizeList;
+    LoopCloser::mutableConfig()._maxPointsSize = config()._maxPointsSize;
+    LoopCloser::mutableConfig()._maxCovPointsSize = config()._maxCovPointsSize;
+    LoopCloser::mutableConfig()._minEigenValue = config()._minSurfEigenValue;
+    LoopCloser::mutableConfig()._gnssMaxError = config()._gnssMaxError;
 
-    const YAML::Node& pcdSave = node["pcd_save"];
+    const YAML::Node &pcdSave = node["pcd_save"];
     _config._isSaveMap = pcdSave["is_save_map"].as<bool>();
     _config._pcdSaveInterval = pcdSave["interval"].as<int>();
 }
 
-bool System::initSystem()
-{
+bool System::initSystem() {
     _imgProcesser.startThread();
     std::cout << "imgprocesser started!" << std::endl;
 
-    if (_config._isEnable3DViewer)
-    {
+    if (_config._isEnable3DViewer) {
         initPCLViewer();
         ColourWheel cw;
         for (int i = 0; i < 200; i++)
             _voxelColors.emplace_back(cw.GetUniqueColour());
     }
-    if (_config._isLoopEn)
-    {
+    if (_config._isLoopEn) {
         _loopCloser = new LoopCloser;
-        if(_loopCloser->config()._detectLoopMethod==1)
-            _loopCloser->mutableConfig()._isNeedGravAligned=false;
+        if (_loopCloser->config()._detectLoopMethod == 1)
+            _loopCloser->mutableConfig()._isNeedGravAligned = false;
         else
-            _loopCloser->mutableConfig()._isNeedGravAligned=false;
+            _loopCloser->mutableConfig()._isNeedGravAligned = false;
 
         _loopCloser->startThread();
         std::cout << "LoopClosing Enabled" << std::endl;
-    }
-    else
+    } else
         std::cout << "LoopClosing Disabled" << std::endl;
 
     _tol << VEC_FROM_ARRAY(_config._tolVec);
@@ -1877,15 +1819,13 @@ bool System::initSystem()
     _Rig << MAT_FROM_ARRAY(_config._RigVec);
     _stateCur.offset_R_L_I = _Ril;
     _stateCur.offset_T_L_I = _til;
-    _statePropagat=_stateCur;
+    _statePropagat = _stateCur;
 
-    if(_config._udpateMethod==0)
-    {//EKF method for state update
+    if (_config._udpateMethod == 0) { //EKF method for state update
         _imuProcessor->set_R_LI_cov(V3D(VEC_FROM_ARRAY(_config._rotLICov)));
         _imuProcessor->set_T_LI_cov(V3D(VEC_FROM_ARRAY(_config._transLICov)));
         _imuProcessor->imu_en = _config._isImuInitialized;
-        if (_config._isImuInitialized)
-        { // IMU extrinsic exists
+        if (_config._isImuInitialized) {         // IMU extrinsic exists
             _imuProcessor->LI_init_done = false; // To init imu in ImuProcess::Process
             _imuProcessor->set_mean_acc_norm(_config._meanAccNorm);
             _imuProcessor->set_gyr_cov(V3D(_config._gyrCov, _config._gyrCov, _config._gyrCov));
@@ -1898,9 +1838,7 @@ bool System::initSystem()
             //            _cutFrameNum = 2;
             //std::cout << "Extrinsic is set, no need to initialization!" << std::endl;
             //printState("Initialized States");
-        }
-        else
-        {// For imu extrinsic calibration
+        } else { // For imu extrinsic calibration
             _initiatorLI = std::make_shared<LI_Init>();
             _initiatorLI->data_accum_length = _config._dataAccumLength;
             _imuProcessor->LI_init_done = false;
@@ -1910,36 +1848,30 @@ bool System::initSystem()
             _imuProcessor->set_acc_bias_cov(V3D(_config._bAccCov, _config._bAccCov, _config._bAccCov));
             _foutResult.open(RESULT_FILE_DIR("Initialization_result.txt"), ios::out);
         }
-    }
-    else if(_config._udpateMethod==1)
-    {//LSQ method for state update
-        if (!_config._isImuInitialized)
-        {
-            std::cerr<<"Update method 0 doesn't support unknown extrinsic!"<<std::endl;
+    } else if (_config._udpateMethod == 1) { //LSQ method for state update
+        if (!_config._isImuInitialized) {
+            std::cerr << "Update method 0 doesn't support unknown extrinsic!" << std::endl;
             return false;
         }
         _imuPreintegration = shared_ptr<ImuPreintegration>(new ImuPreintegration());
-        _imuPreintegration->mutableConfig()._meanAccNorm=_config._meanAccNorm;
-        _imuPreintegration->mutableConfig()._imuGyrNoise=_config._gyrCov;
-        _imuPreintegration->mutableConfig()._imuAccNoise=_config._accCov;
-        _imuPreintegration->mutableConfig()._imuGyrBiasNoise=_config._bGyrCov;
-        _imuPreintegration->mutableConfig()._imuAccBiasNoise=_config._bAccCov;
-        _imuPreintegration->mutableConfig()._Ril=_Ril;
-        _imuPreintegration->mutableConfig()._til=_til;
+        _imuPreintegration->mutableConfig()._meanAccNorm = _config._meanAccNorm;
+        _imuPreintegration->mutableConfig()._imuGyrNoise = _config._gyrCov;
+        _imuPreintegration->mutableConfig()._imuAccNoise = _config._accCov;
+        _imuPreintegration->mutableConfig()._imuGyrBiasNoise = _config._bGyrCov;
+        _imuPreintegration->mutableConfig()._imuAccBiasNoise = _config._bAccCov;
+        _imuPreintegration->mutableConfig()._Ril = _Ril;
+        _imuPreintegration->mutableConfig()._til = _til;
         _imuPreintegration->init();
-       // _regPCL_VGICP.setMaxCorrespondenceDistance(0.05);
-    }
-    else
-    {// State update without imu
-        if (!_config._isImuInitialized)
-        {
-            std::cerr<<"Update method doesn't support unknown extrinsic!"<<std::endl;
+        // _regPCL_VGICP.setMaxCorrespondenceDistance(0.05);
+    } else { // State update without imu
+        if (!_config._isImuInitialized) {
+            std::cerr << "Update method doesn't support unknown extrinsic!" << std::endl;
             return false;
         }
     }
 
-    if(config()._isCutFrame)
-        mutableConfig()._cutFrameNum=1;
+    if (config()._isCutFrame)
+        mutableConfig()._cutFrameNum = 1;
 
     _jacoRot.setZero();
     _G.setZero();
@@ -1949,45 +1881,44 @@ bool System::initSystem()
     double epsi[23] = {0.001};
     fill(epsi, epsi + 23, 0.001);
 
-    if(_config._matchMethod==0)
+    if (_config._matchMethod == 0)
         _kf.init_dyn_share(get_f, df_dx, df_dw,
                            std::bind(&System::hShareModelKdTree, this, std::placeholders::_1, std::placeholders::_2),
                            _config._nMaxInterations,
                            epsi);
-    else if(_config._matchMethod==1)
+    else if (_config._matchMethod == 1)
         _kf.init_dyn_share(get_f, df_dx, df_dw,
                            std::bind(&System::hShareModelVoxelMap, this, std::placeholders::_1, std::placeholders::_2),
                            _config._nMaxInterations,
                            epsi);
 
-    auto& state=const_cast<state_ikfom&>(_kf.get_x());
+    auto &state = const_cast<state_ikfom &>(_kf.get_x());
     state.offset_R_L_I = _Ril;
     state.offset_T_L_I = _til;
-    _globalGrav=state.grav;
+    _globalGrav = state.grav;
 
     _lidarProcessor->setDownsampleLeafSize(_config._filterSizeSurf, _config._filterSizeSurf, _config._filterSizeSurf);
     _ikdtree.set_downsample_param(_config._filterSizeMap);
 
-    if(_config._udpateMethod>=1)
+    if (_config._udpateMethod >= 1)
         _voxelMapGaussian.reset(new GaussianVoxelMap<PointType>(System::mutableConfig()._voxelLength, VoxelAccumulationMode::ADDITIVE));
 
-    if(!_config._pcapFilePath.empty())
-    {// Reading lidar data from pcap file
+    if (!_config._pcapFilePath.empty()) { // Reading lidar data from pcap file
         double startAngle = 0.;
         //_pandarReader = new PandarGeneral(_config._pcapFilePath, std::bind(&System::lidCallback, this, std::placeholders::_1, std::placeholders::_2), static_cast<int>(startAngle * 100 + 0.5), 0, 0, "PandarXT-16", "PandarXT-16", "", false);
         //if (!_pandarReader)
         //{
         //    std::cout << "Created pander reader failed" << std::endl;
         //    return false;
-       // }
+        // }
         //if (0 != _pandarReader->LoadCorrectionFile(_config._lidarCorrectFilePath))
-       // {
+        // {
         //    std::cout << "Loaded correction file from " << _config._lidarCorrectFilePath << " failed" << std::endl;
         //    return false;
         //}
     }
 
-    ReadWriter::cleanDir(std::string(ROOT_DIR)+"PCD");
+    ReadWriter::cleanDir(std::string(ROOT_DIR) + "PCD");
 
     std::cout << "Initialize|Lidar type: " << LidarProcess::config()._lidarType << endl;
     std::cout << "Initialize|Pcap path: " << _config._pcapFilePath << endl;
@@ -1997,14 +1928,12 @@ bool System::initSystem()
     return true;
 }
 
-void System::resetSystem()
-{
+void System::resetSystem() {
     System::mutableConfig()._isMotorInitialized = true;
     System::mutableConfig()._isSaveMap = true;
     _frameId = 0;
     // Stop display thread and clear buffer
-    if (_dispThread)
-    {
+    if (_dispThread) {
         _isResetShow = true;
         _dispMutex.lock();
 
@@ -2046,22 +1975,18 @@ void System::resetSystem()
     _ikdtree.Build(_globalCloudDownPtr->points); // pw
 }
 
-bool System::start()
-{
-    if(!initSystem())
-    {
-        std::cerr<<"System initializing failed!"<<std::endl;
+bool System::start() {
+    if (!initSystem()) {
+        std::cerr << "System initializing failed!" << std::endl;
         return false;
     }
 
-    if(!ReadWriter::parseIMUFile(System::config()._imuFilePath, _imuBufferAll))
-    {
-        std::cerr<<"Loading IMU data failed!"<<std::endl;
+    if (!ReadWriter::parseIMUFile(System::config()._imuFilePath, _imuBufferAll)) {
+        std::cerr << "Loading IMU data failed!" << std::endl;
         return false;
     }
-    if(!ReadWriter::parseMotorFile(System::config()._rasterFilePath, _motorAngleBufAll))
-    {
-        std::cerr<<"Loading motor data failed!"<<std::endl;
+    if (!ReadWriter::parseMotorFile(System::config()._rasterFilePath, _motorAngleBufAll)) {
+        std::cerr << "Loading motor data failed!" << std::endl;
         return false;
     }
 
@@ -2069,8 +1994,7 @@ bool System::start()
     return true;
 }
 
-void System::stop()
-{
+void System::stop() {
     //if(_pandarReader)
     //{
     //    _pandarReader->Stop();
@@ -2081,41 +2005,38 @@ void System::stop()
     //    }
     //}
 
-    if (!_loopCloser->isFinished())
-    {
+    if (!_loopCloser->isFinished()) {
         _loopCloser->requestFinish();
         while (!_loopCloser->isFinished())
             usleep(5000);
     }
-	_isFinished = true;
+    _isFinished = true;
 }
 
-bool System::isFinished()
-{
-	//if(_pandarReader)
-	//	if (_pandarReader->isFinished())
-	//		stop();
+bool System::isFinished() {
+    //if(_pandarReader)
+    //	if (_pandarReader->isFinished())
+    //		stop();
 
-	return _isFinished;
+    return _isFinished;
 }
 
 CRegistration<PointType> cReg;
-pcl::PointCloud<PointType>::Ptr lastSubmapCloud(new pcl::PointCloud<PointType>()),curTransCloud(new PointCloudXYZI);
-PointCloudXYZI::Ptr curTransCloudDS(new PointCloudXYZI),lastSubmapCloudDS(new pcl::PointCloud<PointType>());
-bool System::processContinualTask(const std::string& lastTaskPath)
-{
-    if(!_loopCloser)
+pcl::PointCloud<PointType>::Ptr lastSubmapCloud(new pcl::PointCloud<PointType>()), curTransCloud(new PointCloudXYZI);
+PointCloudXYZI::Ptr curTransCloudDS(new PointCloudXYZI), lastSubmapCloudDS(new pcl::PointCloud<PointType>());
+bool System::processContinualTask(const std::string &lastTaskPath) {
+    if (!_loopCloser)
         return false;
-    if(_loopCloser->getSubMapBlocks().empty())
+    if (_loopCloser->getSubMapBlocks().empty())
         return false;
 
     printf("续扫拼接计算....\n");
 
     //    std::cout << "读取bin...\n";
-    float lastTaskRefPose[6] = {0};    // x,y,z, roll, pitch,yaw
+    float lastTaskRefPose[6] = {0}; // x,y,z, roll, pitch,yaw
     bool bReadOk = false;
     bReadOk = readLastTaskInfo(lastTaskPath, lastTaskRefPose, lastSubmapCloud);
-    if(!bReadOk)
+    if (!bReadOk)
         return false;
 
     printf("续扫bin文件读取完成....\n");
@@ -2134,12 +2055,12 @@ bool System::processContinualTask(const std::string& lastTaskPath)
     pcdWriter.writeBinary(string(ROOT_DIR) + "/PCD/curTrans.pcd", *curTransCloud);
     pcdWriter.writeBinary(string(ROOT_DIR) + "/PCD/lastSubmapCloud.pcd", *lastSubmapCloud);
 
-    voxelFilter(lastSubmapCloud,lastSubmapCloudDS,0.5);
-    voxelFilter(curTransCloud,curTransCloudDS,0.5);
+    voxelFilter(lastSubmapCloud, lastSubmapCloudDS, 0.5);
+    voxelFilter(curTransCloud, curTransCloudDS, 0.5);
 
     std::cout << "coarse align...\n";
-    Eigen::Matrix4f  coarseTransMatrix =  Eigen::Matrix4f::Identity();
-    cReg.coarse_reg_SACIA(curTransCloudDS, lastSubmapCloudDS, coarseTransMatrix, 0/*0.5*/, 30/*30*/, 80);
+    Eigen::Matrix4f coarseTransMatrix = Eigen::Matrix4f::Identity();
+    cReg.coarse_reg_SACIA(curTransCloudDS, lastSubmapCloudDS, coarseTransMatrix, 0 /*0.5*/, 30 /*30*/, 80);
     printf("续扫coarse拼接完成....\n");
     //        printf("续扫coarse拼接完成....\n");
 
@@ -2149,11 +2070,11 @@ bool System::processContinualTask(const std::string& lastTaskPath)
 
     std::cout << "fine align...\n";
 
-//    Eigen::Matrix4f  fineTransMatrix =  Eigen::Matrix4f::Identity();
-//    pcl::PointCloud<PointType>::Ptr finalTransCloud(new pcl::PointCloud<PointType>());
-//    registerByGICP(coarseTransCloud, lastSubmapCloud, fineTransMatrix, 1.5, 10, finalTransCloud);
-//    pcdWriter.writeBinary(string(ROOT_DIR) + "/PCD/curTrans2.pcd", *finalTransCloud);
-//    Eigen::Matrix4d transCur2LastTask = Eigen::Matrix4f(fineTransMatrix*coarseTransMatrix * transGuess.matrix()).cast<double>();
+    //    Eigen::Matrix4f  fineTransMatrix =  Eigen::Matrix4f::Identity();
+    //    pcl::PointCloud<PointType>::Ptr finalTransCloud(new pcl::PointCloud<PointType>());
+    //    registerByGICP(coarseTransCloud, lastSubmapCloud, fineTransMatrix, 1.5, 10, finalTransCloud);
+    //    pcdWriter.writeBinary(string(ROOT_DIR) + "/PCD/curTrans2.pcd", *finalTransCloud);
+    //    Eigen::Matrix4d transCur2LastTask = Eigen::Matrix4f(fineTransMatrix*coarseTransMatrix * transGuess.matrix()).cast<double>();
 
     fast_gicp::FastVGICP<pcl::PointXYZ, pcl::PointXYZ> fastVGICPReg;
     fastVGICPReg.setResolution(1.0);
@@ -2166,11 +2087,10 @@ bool System::processContinualTask(const std::string& lastTaskPath)
     fastVGICPReg.setInputTarget(localCloudXYZPtr2);
     pcl::PointCloud<pcl::PointXYZ>::Ptr aligned(new pcl::PointCloud<pcl::PointXYZ>);
     fastVGICPReg.align(*aligned, Eigen::Matrix4d::Identity());
-    Eigen::Matrix4d fineTransMatrix=fastVGICPReg.getFinalTransformation();
-    bool isConverged=fastVGICPReg.hasConverged();
-    if(!isConverged)
-    {
-        std::cerr<<"Continual work not converged"<<std::endl;
+    Eigen::Matrix4d fineTransMatrix = fastVGICPReg.getFinalTransformation();
+    bool isConverged = fastVGICPReg.hasConverged();
+    if (!isConverged) {
+        std::cerr << "Continual work not converged" << std::endl;
         //return false;
     }
     pcdWriter.writeBinary(string(ROOT_DIR) + "/PCD/curTrans2.pcd", *aligned);
@@ -2181,38 +2101,36 @@ bool System::processContinualTask(const std::string& lastTaskPath)
     pcl::transformPointCloud(*curSubmapCloud, *finalTransCloud, transCur2LastTask);
     pcdWriter.writeBinary(string(ROOT_DIR) + "/PCD/finalTransCloud.pcd", *finalTransCloud);
 
-//    for(auto & frameBlock : _loopCloser->getFrameBlocks())
-//    {
-//        pcl::PointCloud<PointType>::Ptr frameCloud(new pcl::PointCloud<PointType>());
-//        pcl::io::loadPCDFile(frameBlock->_pcdFilePath, *frameBlock->_pcRaw);
-//        pcl::transformPointCloud(*frameBlock->_pcRaw, *frameCloud, frameBlock->_poseLo);
-//        pcdWriter.writeBinary(string(ROOT_DIR) + "/PCD/frame_ori_"+std::to_string(frameBlock->_uniqueId)+".pcd", *frameCloud);
-//    }
+    //    for(auto & frameBlock : _loopCloser->getFrameBlocks())
+    //    {
+    //        pcl::PointCloud<PointType>::Ptr frameCloud(new pcl::PointCloud<PointType>());
+    //        pcl::io::loadPCDFile(frameBlock->_pcdFilePath, *frameBlock->_pcRaw);
+    //        pcl::transformPointCloud(*frameBlock->_pcRaw, *frameCloud, frameBlock->_poseLo);
+    //        pcdWriter.writeBinary(string(ROOT_DIR) + "/PCD/frame_ori_"+std::to_string(frameBlock->_uniqueId)+".pcd", *frameCloud);
+    //    }
 
-    std::cout<<transCur2LastTask<<std::endl;
-    for(auto & frameBlock : _loopCloser->getFrameBlocks())
-        frameBlock->_poseLo=transCur2LastTask*frameBlock->_poseLo;
+    std::cout << transCur2LastTask << std::endl;
+    for (auto &frameBlock : _loopCloser->getFrameBlocks())
+        frameBlock->_poseLo = transCur2LastTask * frameBlock->_poseLo;
 
     printf("续扫拼接完成....\n");
     //printf("续扫拼接完成....\n");
     return true;
 }
 
-void System::saveLastTaskInfo(const std::string& lastTaskPath)
-{
-    if(_loopCloser->getSubMapBlocks().empty())
+void System::saveLastTaskInfo(const std::string &lastTaskPath) {
+    if (_loopCloser->getSubMapBlocks().empty())
         return;
-    if(_loopCloser->getSubMapBlocks().size() < 2)
+    if (_loopCloser->getSubMapBlocks().size() < 2)
         return;
 
-    auto lastSubmap=_loopCloser->getSubMapBlocks().back();
+    auto lastSubmap = _loopCloser->getSubMapBlocks().back();
 
     float x, y, z, roll, pitch, yaw;
     pcl::getTranslationAndEulerAngles(Eigen::Affine3d(lastSubmap->_poseLo).cast<float>(), x, y, z, roll, pitch, yaw);
     Eigen::Quaterniond rotAlignQuat = Eigen::Quaterniond(_rotAlign);
     FILE *fout = fopen(lastTaskPath.c_str(), "wb");
-    if(fout)
-    {
+    if (fout) {
         float rpyXYZ[6] = {x, y, z, roll, pitch, yaw};
         fwrite(rpyXYZ, sizeof(float), 6, fout);
         double gravAlign[4] = {rotAlignQuat.x(), rotAlignQuat.y(), rotAlignQuat.z(), rotAlignQuat.w()};
@@ -2223,8 +2141,7 @@ void System::saveLastTaskInfo(const std::string& lastTaskPath)
         PointCloudXYZI::Ptr globalDownCloud(new PointCloudXYZI());
         pcl::transformPointCloud(*lastSubmap->_pcDown, *globalDownCloud, lastSubmap->_poseLo);
         std::vector<float> xyziData(ptsNum * 4);
-        for(unsigned long j = 0; j < ptsNum; j++)
-        {
+        for (unsigned long j = 0; j < ptsNum; j++) {
             xyziData[j * 4 + 0] = globalDownCloud->points[j].x;
             xyziData[j * 4 + 1] = globalDownCloud->points[j].y;
             xyziData[j * 4 + 2] = globalDownCloud->points[j].z;
@@ -2233,32 +2150,28 @@ void System::saveLastTaskInfo(const std::string& lastTaskPath)
 
         fwrite(&xyziData[0], sizeof(float), ptsNum * 4, fout);
         fclose(fout);
-    }
-    else
-        std::cerr<<"Failed openning file: "<<lastTaskPath<<std::endl;
+    } else
+        std::cerr << "Failed openning file: " << lastTaskPath << std::endl;
 
-//    pcl::PCDWriter pcdWriter;
-//    for(auto & frameBlock : _loopCloser->getFrameBlocks())
-//    {
-//        pcl::PointCloud<PointType>::Ptr frameCloud(new pcl::PointCloud<PointType>());
-//        pcl::io::loadPCDFile(frameBlock->_pcdFilePath, *frameBlock->_pcRaw);
-//        pcl::transformPointCloud(*frameBlock->_pcRaw, *frameCloud, frameBlock->_poseLo);
-//        pcdWriter.writeBinary(string(ROOT_DIR) + "/PCD/frame_"+std::to_string(frameBlock->_uniqueId)+".pcd", *frameCloud);
-//    }
-    std::cout<<"Last task saved!"<<std::endl;
+    //    pcl::PCDWriter pcdWriter;
+    //    for(auto & frameBlock : _loopCloser->getFrameBlocks())
+    //    {
+    //        pcl::PointCloud<PointType>::Ptr frameCloud(new pcl::PointCloud<PointType>());
+    //        pcl::io::loadPCDFile(frameBlock->_pcdFilePath, *frameBlock->_pcRaw);
+    //        pcl::transformPointCloud(*frameBlock->_pcRaw, *frameCloud, frameBlock->_poseLo);
+    //        pcdWriter.writeBinary(string(ROOT_DIR) + "/PCD/frame_"+std::to_string(frameBlock->_uniqueId)+".pcd", *frameCloud);
+    //    }
+    std::cout << "Last task saved!" << std::endl;
 }
 
-bool System::readLastTaskInfo(const std::string& lastTaskPath, float *refXYZ, pcl::PointCloud<PointType>::Ptr &lastSubmap)
-{
-    FILE* fin = fopen(lastTaskPath.c_str(), "rb");
-    if (!fin)
-    {
+bool System::readLastTaskInfo(const std::string &lastTaskPath, float *refXYZ, pcl::PointCloud<PointType>::Ptr &lastSubmap) {
+    FILE *fin = fopen(lastTaskPath.c_str(), "rb");
+    if (!fin) {
         std::cout << "error: cannot read last task file!\n";
         return false;
     }
 
-    if(fin)
-    {
+    if (fin) {
         float readXYZ[6] = {0};
         fread(readXYZ, sizeof(float), 6, fin);
         memcpy(refXYZ, readXYZ, sizeof(float) * 6);
@@ -2266,17 +2179,16 @@ bool System::readLastTaskInfo(const std::string& lastTaskPath, float *refXYZ, pc
         double gravAlignData[4] = {0};
         fread(gravAlignData, sizeof(double), 4, fin);
         Eigen::Quaterniond gravAignQuat;
-        gravAignQuat.x()=gravAlignData[0];
-        gravAignQuat.y()=gravAlignData[1];
-        gravAignQuat.z()=gravAlignData[2];
-        gravAignQuat.w()=gravAlignData[3];
-        _rotAlign=gravAignQuat.matrix();
+        gravAignQuat.x() = gravAlignData[0];
+        gravAignQuat.y() = gravAlignData[1];
+        gravAignQuat.z() = gravAlignData[2];
+        gravAignQuat.w() = gravAlignData[3];
+        _rotAlign = gravAignQuat.matrix();
         // printf("read ref-XYZ: %f %f %f\n", refXYZ[0], refXYZ[1], refXYZ[2]);
 
         unsigned long ptsNum = 0;
         fread(&ptsNum, sizeof(unsigned long), 1, fin);
-        if(ptsNum == 0)
-        {
+        if (ptsNum == 0) {
             fclose(fin);
             std::cout << "warning: last task submap is empty\n";
             return false;
@@ -2285,8 +2197,7 @@ bool System::readLastTaskInfo(const std::string& lastTaskPath, float *refXYZ, pc
         // std::cout << "读取到子地图点数: " << ptsNum << std::endl;
 
         lastSubmap->resize(ptsNum);
-        for(int i=0; i<lastSubmap->size(); i++)
-        {
+        for (int i = 0; i < lastSubmap->size(); i++) {
             fread(&lastSubmap->points[i].x, sizeof(float), 1, fin);
             fread(&lastSubmap->points[i].y, sizeof(float), 1, fin);
             fread(&lastSubmap->points[i].z, sizeof(float), 1, fin);

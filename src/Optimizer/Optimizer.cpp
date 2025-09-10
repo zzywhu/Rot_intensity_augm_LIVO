@@ -3,8 +3,7 @@
 //
 #include "Optimizer/Optimizer.h"
 
-void eigToDouble(const Eigen::Matrix3d &R, const Eigen::Vector3d &t, double *pose)
-{
+void eigToDouble(const Eigen::Matrix3d &R, const Eigen::Vector3d &t, double *pose) {
     Eigen::Vector3d Rvec = RotationToAngleAxis(R);
     pose[0] = Rvec.x();
     pose[1] = Rvec.y();
@@ -14,16 +13,14 @@ void eigToDouble(const Eigen::Matrix3d &R, const Eigen::Vector3d &t, double *pos
     pose[5] = t(2);
 }
 
-void doubleToEig(const double *pose, Eigen::Matrix3d &R, Eigen::Vector3d &t)
-{
+void doubleToEig(const double *pose, Eigen::Matrix3d &R, Eigen::Vector3d &t) {
     R = AngleAxisToRotationMatrix(Eigen::Vector3d(pose[0], pose[1], pose[2]));
     t = Eigen::Vector3d(pose[3], pose[4], pose[5]);
 }
 
 void poseOptimize(MatchedInfoList &matchedInfoList, const double &motorRotAngle,
                   Eigen::Matrix3d &exR, Eigen::Vector3d &ext,
-                  double maxOulierErr, bool isVerbose)
-{
+                  double maxOulierErr, bool isVerbose) {
     ceres::Problem problem;
     ceres::LossFunction *lossFunction;
     lossFunction = new ceres::HuberLoss(2.0);
@@ -32,28 +29,27 @@ void poseOptimize(MatchedInfoList &matchedInfoList, const double &motorRotAngle,
     eigToDouble(exR, ext, exPose6d);
     problem.AddParameterBlock(exPose6d, 6);
 
-    for (auto &match : matchedInfoList)
-    {
+    for (auto &match : matchedInfoList) {
         const double *pabcd = match._pabcd.data();
         ceres::CostFunction *costfunc = RegErrorOnlyExPose::Create(pabcd, match._pl, motorRotAngle);
         problem.AddResidualBlock(costfunc, lossFunction, exPose6d);
     }
 
-//    double totalResidual=0;
-//    for(int i=0; i < frameSize; i++)
-//    {
-//        auto& matchedInfos = matchedInfoList[i];
-//        const double& theta = rotationAngleList[i];
-//        for(auto mItr =  matchedInfos.begin();mItr!=matchedInfos.end();mItr++)
-//        {
-//            double point3d[3]={mItr->first.x,mItr->first.y,mItr->first.z};
-//            double* pabcd = mItr->second.data();
-//            double res=computeResidual(exPose6d, pabcd, point3d, theta);
-//            //std::cout<<"Residual:"<<res<<std::endl;
-//            totalResidual+=res;
-//        }
-//    }
-//    std::cout<<"Total residual before BA:"<<totalResidual<<std::endl;
+    //    double totalResidual=0;
+    //    for(int i=0; i < frameSize; i++)
+    //    {
+    //        auto& matchedInfos = matchedInfoList[i];
+    //        const double& theta = rotationAngleList[i];
+    //        for(auto mItr =  matchedInfos.begin();mItr!=matchedInfos.end();mItr++)
+    //        {
+    //            double point3d[3]={mItr->first.x,mItr->first.y,mItr->first.z};
+    //            double* pabcd = mItr->second.data();
+    //            double res=computeResidual(exPose6d, pabcd, point3d, theta);
+    //            //std::cout<<"Residual:"<<res<<std::endl;
+    //            totalResidual+=res;
+    //        }
+    //    }
+    //    std::cout<<"Total residual before BA:"<<totalResidual<<std::endl;
 
     ceres::Solver::Options options;
     options.gradient_tolerance = 1e-16;
@@ -73,24 +69,19 @@ void poseOptimize(MatchedInfoList &matchedInfoList, const double &motorRotAngle,
     //std::cout << summary.BriefReport() << "\n";
 
     //Discard ouliers
-    if (isVerbose || maxOulierErr)
-    {
+    if (isVerbose || maxOulierErr) {
         double totalResidual = 0;
         int nDiscard = 0;
-        for (auto mItr = matchedInfoList.begin(); mItr != matchedInfoList.end();)
-        {
+        for (auto mItr = matchedInfoList.begin(); mItr != matchedInfoList.end();) {
             double point3d[3] = {mItr->_pl.x(), mItr->_pl.y(), mItr->_pl.z()};
             double *pabcd = mItr->_pabcd.data();
             double res = computeResidual(exPose6d, pabcd, point3d, motorRotAngle);
             //std::cout<<"Residual:"<<res<<std::endl;
 
-            if (maxOulierErr > 0 && res > maxOulierErr)
-            {
+            if (maxOulierErr > 0 && res > maxOulierErr) {
                 mItr = matchedInfoList.erase(mItr);
                 nDiscard++;
-            }
-            else
-            {
+            } else {
                 mItr++;
                 totalResidual += res;
             }
@@ -104,8 +95,7 @@ void poseOptimize(MatchedInfoList &matchedInfoList, const double &motorRotAngle,
 }
 
 void initOptimize(const MatchedInfoList &matchedInfoList, const double &rotationAngle,
-                  Eigen::Matrix3d &exR, Eigen::Vector3d &ext)
-{
+                  Eigen::Matrix3d &exR, Eigen::Vector3d &ext) {
     ceres::Problem problem;
     ceres::LossFunction *lossFunction;
     lossFunction = new ceres::HuberLoss(2.0);
@@ -114,8 +104,7 @@ void initOptimize(const MatchedInfoList &matchedInfoList, const double &rotation
     eigToDouble(exR, ext, exPose6d);
     problem.AddParameterBlock(exPose6d, 6);
 
-    for (auto &match : matchedInfoList)
-    {
+    for (auto &match : matchedInfoList) {
         Eigen::Vector3d point3d;
         point3d << match._pl.x(), match._pl.y(), match._pl.z();
         const double *_pabcd = match._pabcd.data();
@@ -144,8 +133,7 @@ void initOptimize(const MatchedInfoList &matchedInfoList, const double &rotation
 }
 
 void calcHandeyeExtrinsic(const std::vector<Eigen::Matrix4d> &relativeTos, const std::vector<Eigen::Matrix4d> &relativeTls,
-                          Eigen::Matrix3d &exR, Eigen::Vector3d &ext)
-{
+                          Eigen::Matrix3d &exR, Eigen::Vector3d &ext) {
     ceres::Problem problem;
     ceres::LossFunction *lossFunction;
     lossFunction = new ceres::HuberLoss(0.1);
@@ -154,8 +142,7 @@ void calcHandeyeExtrinsic(const std::vector<Eigen::Matrix4d> &relativeTos, const
     Eigen::Quaterniond exQ(exR);
     ceres::LocalParameterization *quaternionLocalParameterization = new ceres::EigenQuaternionParameterization;
     int frameSize = relativeTls.size();
-    for (int i = 0; i < frameSize; i++)
-    {
+    for (int i = 0; i < frameSize; i++) {
         Eigen::Quaterniond QoRel(relativeTos[i].block<3, 3>(0, 0));
         Eigen::Quaterniond QlRel(relativeTls[i].block<3, 3>(0, 0));
         Eigen::Vector3d toRel(relativeTos[i].block<3, 1>(0, 3));
@@ -184,4 +171,3 @@ void calcHandeyeExtrinsic(const std::vector<Eigen::Matrix4d> &relativeTos, const
 
     exR = exQ.toRotationMatrix();
 }
-
